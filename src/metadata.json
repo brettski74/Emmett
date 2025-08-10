@@ -1,0 +1,31 @@
+{
+    "$schema": "https://go.kicad.org/pcm/schemas/v1",
+    "name": "Emmett",
+    "description": "a trace router for generating heating element traces on PCBs.",
+    "description_full": "A trace router for generating heating element traces on PCBs.",
+    "identifier": "com.github.brettski74.emmett",
+    "type": "plugin",
+    "author": {
+        "name": "Brett Gersekowski",
+        "contact": {
+            "github": "https://github.com/brettski74"
+        }
+    },
+    "license": "MIT",
+    "resources": {
+        "homepage": "https://github.com/brettski74/Emmett"
+    },
+    "versions": [
+        {
+            "version": "0.1.0",
+            "status": "development",
+            "kicad_version": "9.0.3",
+            "platforms": [
+                "linux",
+                "macos",
+                "windows"
+            ]
+
+        }
+    ]
+}
