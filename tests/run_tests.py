@@ -14,7 +14,7 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src', 'plugins'))
 
 # Import test modules
-from test_resistance_calc import (
+from test_trace_segment_factory import (
     test_basic_calculations,
     test_serpentine_pattern,
     test_parameter_variations,

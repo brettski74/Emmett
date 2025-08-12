@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-Test suite for the ResistanceCalculator class.
+Test suite for the TraceSegmentFactory class.
 
 This module tests the PCB trace resistance calculation functionality,
 including linear segments, arc segments, and the factory pattern.
@@ -13,14 +13,14 @@ import os
 # Add the src/plugins directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src', 'plugins'))
 
-from resistance_calc import ResistanceCalculator, LinearSegment, ArcSegment
+from trace_segment_factory import TraceSegmentFactory, LinearSegment, ArcSegment
 
 
 def test_basic_calculations():
     """Test basic resistance calculations."""
     print("=== Basic Resistance Calculations ===")
     
-    calc = ResistanceCalculator()
+    calc = TraceSegmentFactory()
     
     # Test straight line segment using factory method
     straight = calc.create_linear_segment(
@@ -54,7 +54,7 @@ def test_serpentine_pattern():
     """Test a serpentine heating element pattern."""
     print("=== Serpentine Heating Element Pattern ===")
     
-    calc = ResistanceCalculator()
+    calc = TraceSegmentFactory()
     segments = []
     
     # Create a simple serpentine pattern
@@ -121,7 +121,7 @@ def test_parameter_variations():
     print("=== Parameter Variations ===")
     
     # Create a simple test segment
-    calc = ResistanceCalculator()
+    calc = TraceSegmentFactory()
     test_segment = calc.create_linear_segment(
         start_point=(0.0, 0.0),
         end_point=(0.01, 0.0),  # 1cm
@@ -154,7 +154,7 @@ def test_arc_adjustment_factors():
     """Test the effect of arc adjustment factors."""
     print("=== Arc Adjustment Factor Effects ===")
     
-    calc = ResistanceCalculator()
+    calc = TraceSegmentFactory()
     
     # Create a 90-degree arc
     arc = calc.create_arc_segment(
@@ -177,7 +177,7 @@ def test_polymorphism():
     """Test that the polymorphic behavior works correctly."""
     print("=== Polymorphism Test ===")
     
-    calc = ResistanceCalculator()
+    calc = TraceSegmentFactory()
     
     # Create segments of different types using factory methods
     linear = calc.create_linear_segment((0.0, 0.0), (0.01, 0.0), 0.001)
@@ -200,7 +200,7 @@ def test_factory_pattern():
     """Test the factory pattern and parameter binding."""
     print("=== Factory Pattern Test ===")
     
-    calc = ResistanceCalculator()
+    calc = TraceSegmentFactory()
     
     # Create segments using factory methods
     linear = calc.create_linear_segment((0.0, 0.0), (0.01, 0.0), 0.001)
@@ -252,7 +252,7 @@ if __name__ == "__main__":
     test_factory_pattern()
     
     print("=== Summary ===")
-    print("The ResistanceCalculator provides:")
+    print("The TraceSegmentFactory provides:")
     print("  - Clean object-oriented design with proper inheritance")
     print("  - Factory pattern for creating trace segments")
     print("  - Automatic parameter binding - segments know their calculator")

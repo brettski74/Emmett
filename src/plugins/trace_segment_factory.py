@@ -55,7 +55,7 @@ class LinearSegment(TraceSegment):
     """Represents a straight line trace segment."""
     
     def __init__(self, start_point: Tuple[float, float], end_point: Tuple[float, float], 
-                 width: float, calculator: 'ResistanceCalculator'):
+                 width: float, calculator: 'TraceSegmentFactory'):
         """
         Initialize a linear segment.
         
@@ -103,7 +103,7 @@ class ArcSegment(TraceSegment):
     """Represents an arc trace segment defined by 3 points (start, mid, end)."""
     
     def __init__(self, start_point: Tuple[float, float], mid_point: Tuple[float, float],
-                 end_point: Tuple[float, float], width: float, calculator: 'ResistanceCalculator'):
+                 end_point: Tuple[float, float], width: float, calculator: 'TraceSegmentFactory'):
         """
         Initialize an arc segment using KiCad's 3-point definition.
         
@@ -271,12 +271,12 @@ class ArcSegment(TraceSegment):
         return adjusted_resistance
 
 
-class ResistanceCalculator:
+class TraceSegmentFactory:
     """
-    Calculator for PCB trace resistance.
+    Factory for creating and managing PCB trace segments.
     
     Supports both straight line traces and arc traces using the parallel conductor model.
-    Acts as a factory for creating trace segments.
+    Acts as a factory for creating trace segments and calculating resistances.
     """
     
     # Default values
@@ -431,7 +431,7 @@ class ResistanceCalculator:
 # Example usage and testing
 if __name__ == "__main__":
     # Create a calculator with default parameters
-    calc = ResistanceCalculator()
+    calc = TraceSegmentFactory()
     
     # Example: Create some test segments using the factory methods
     # Straight line segment: 10cm long, 2mm wide
@@ -492,7 +492,7 @@ if __name__ == "__main__":
     print("Creating calculator with different TCR (e.g., for different material):")
     
     # Create calculator with different TCR (e.g., for aluminum)
-    calc_aluminum = ResistanceCalculator(tcr=0.00429)  # Aluminum TCR
+    calc_aluminum = TraceSegmentFactory(tcr=0.00429)  # Aluminum TCR
     print(f"Aluminum TCR: {calc_aluminum.tcr:.5f} per °C")
     
     # Compare temperature effects
