@@ -33,7 +33,7 @@ $(ZIP_FILE): $(PLUGIN_FILES)
 	@echo "Creating Emmett plugin package: $(ZIP_FILE)"
 	@mkdir -p $(BUILD_DIR)
 	@rm -f $(ZIP_FILE)
-	@cd $(BUILD_DIR) && zip -r $(notdir $(ZIP_FILE)) $(addprefix ../src/,$(PLUGIN_FILES))
+	@zip -r $(ZIP_FILE) $(PLUGIN_FILES)
 	@echo "Package created: $(ZIP_FILE)"
 	@echo "You can now install Emmett via KiCad Plugin and Content Manager"
 
