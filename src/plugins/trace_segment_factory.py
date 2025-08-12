@@ -1,9 +1,8 @@
-#!/usr/bin/python3
 """
-Hotplate Resistance Calculator for PCB Traces
+TraceSegmentFactory and related classes for PCB trace resistance calculation.
 
-This module provides a class to calculate the resistance of PCB hotplate traces,
-including both straight line segments and arc segments using the annular sector model.
+This module provides classes for creating trace segments and calculating
+their resistance using accurate physical models.
 """
 
 import math
@@ -50,6 +49,30 @@ class TraceSegment(ABC):
         """Get the width of the trace segment in meters."""
         return self.width
 
+    def get_resistance(self, temperature_celsius: Optional[float] = None) -> float:
+        """
+        Calculate resistance of a trace segment.
+        
+        Args:
+            temperature_celsius: Optional temperature in °C for TCR adjustment
+                               (assumes resistivity is at 20°C)
+        
+        Returns:
+            Resistance in Ohms (temperature-adjusted if temperature provided)
+        """
+        length = self.get_length()
+        width = self.get_width()
+        cross_sectional_area = width * self._calculator.thickness
+        
+        # R = ρ * L / A
+        resistance = self._calculator.resistivity * length / cross_sectional_area
+        
+        # Apply temperature coefficient of resistance if temperature provided
+        if temperature_celsius is not None:
+            resistance = self._calculator._apply_temperature_adjustment(resistance, temperature_celsius)
+        
+        return resistance
+
 
 class LinearSegment(TraceSegment):
     """Represents a straight line trace segment."""
@@ -74,30 +97,6 @@ class LinearSegment(TraceSegment):
         dy = self.end_point[1] - self.start_point[1]
         return math.sqrt(dx*dx + dy*dy)
     
-    def get_resistance(self, temperature_celsius: Optional[float] = None) -> float:
-        """
-        Calculate resistance of a straight line trace segment.
-        
-        Args:
-            temperature_celsius: Optional temperature in °C for TCR adjustment
-                               (assumes resistivity is at 20°C)
-        
-        Returns:
-            Resistance in Ohms (temperature-adjusted if temperature provided)
-        """
-        length = self.get_length()
-        width = self.get_width()
-        cross_sectional_area = width * self._calculator.thickness
-        
-        # R = ρ * L / A
-        resistance = self._calculator.resistivity * length / cross_sectional_area
-        
-        # Apply temperature coefficient of resistance if temperature provided
-        if temperature_celsius is not None:
-            resistance = self._calculator._apply_temperature_adjustment(resistance, temperature_celsius)
-        
-        return resistance
-
 
 class ArcSegment(TraceSegment):
     """Represents an arc trace segment defined by 3 points (start, mid, end)."""

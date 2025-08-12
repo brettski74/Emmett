@@ -12,7 +12,8 @@ BUILD_DIR = ../build
 PLUGIN_BUILD_DIR = $(BUILD_DIR)/$(PLUGIN_NAME)
 
 # Source files to include in the package
-PLUGIN_FILES = metadata.json plugins resources
+PLUGIN_CONTENTS = metadata.json plugins resources
+PLUGIN_FILES = $(wildcard plugins/*.py) $(wildcard plugins/*.png) $(wildcard resources/*)
 
 # Output ZIP file (in build directory)
 ZIP_FILE = $(BUILD_DIR)/$(PLUGIN_NAME)-$(PLUGIN_VERSION).zip
@@ -33,7 +34,7 @@ $(ZIP_FILE): $(PLUGIN_FILES)
 	@echo "Creating Emmett plugin package: $(ZIP_FILE)"
 	@mkdir -p $(BUILD_DIR)
 	@rm -f $(ZIP_FILE)
-	@zip -r $(ZIP_FILE) $(PLUGIN_FILES)
+	@zip -r -x@exclude.lst $(ZIP_FILE) $(PLUGIN_CONTENTS)
 	@echo "Package created: $(ZIP_FILE)"
 	@echo "You can now install Emmett via KiCad Plugin and Content Manager"
 
@@ -42,29 +43,6 @@ clean:
 	@echo "Cleaning up build directory..."
 	@rm -rf $(BUILD_DIR)
 	@echo "Clean complete"
-
-# Install plugin directly to KiCad (for development/testing)
-# Note: This requires setting KICAD_PLUGIN_DIR environment variable
-install: $(ZIP_FILE)
-	@if [ -z "$(KICAD_PLUGIN_DIR)" ]; then \
-		echo "Error: KICAD_PLUGIN_DIR environment variable not set"; \
-		echo "Set it to your KiCad plugin directory (e.g., ~/.local/share/kicad/9.0/scripting/plugins)"; \
-		exit 1; \
-	fi
-	@echo "Installing plugin to $(KICAD_PLUGIN_DIR)"
-	@mkdir -p "$(KICAD_PLUGIN_DIR)/$(PLUGIN_NAME)"
-	@cp -r $(addprefix ../src/,$(PLUGIN_FILES)) "$(KICAD_PLUGIN_DIR)/$(PLUGIN_NAME)/"
-	@echo "Plugin installed successfully"
-
-# Uninstall plugin
-uninstall:
-	@if [ -z "$(KICAD_PLUGIN_DIR)" ]; then \
-		echo "Error: KICAD_PLUGIN_DIR environment variable not set"; \
-		exit 1; \
-	fi
-	@echo "Uninstalling plugin from $(KICAD_PLUGIN_DIR)"
-	@rm -rf "$(KICAD_PLUGIN_DIR)/$(PLUGIN_NAME)"
-	@echo "Plugin uninstalled successfully"
 
 # Run tests
 test:
