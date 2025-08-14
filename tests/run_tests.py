@@ -23,6 +23,9 @@ from test_trace_segment_factory import (
     test_factory_pattern
 )
 
+# Import BoardBuilder tests
+from test_board_builder import TestBoardBuilder
+
 
 def run_tests():
     """Run all tests and report results."""
@@ -39,7 +42,15 @@ def run_tests():
         test_factory_pattern
     ]
     
-    # Run tests
+    # Run unit tests
+    print("\nRunning unit tests...")
+    loader = unittest.TestLoader()
+    suite = loader.loadTestsFromTestCase(TestBoardBuilder)
+    runner = unittest.TextTestRunner(verbosity=2)
+    board_builder_result = runner.run(suite)
+    
+    # Run functional tests
+    print("\nRunning functional tests...")
     passed = 0
     failed = 0
     
@@ -55,9 +66,15 @@ def run_tests():
     
     # Summary
     print("\n" + "=" * 40)
-    print(f"Test Results: {passed} passed, {failed} failed")
+    print(f"Functional Tests: {passed} passed, {failed} failed")
+    print(f"BoardBuilder Tests: {board_builder_result.testsRun - len(board_builder_result.failures) - len(board_builder_result.errors)} passed, {len(board_builder_result.failures) + len(board_builder_result.errors)} failed")
     
-    if failed == 0:
+    total_passed = passed + (board_builder_result.testsRun - len(board_builder_result.failures) - len(board_builder_result.errors))
+    total_failed = failed + len(board_builder_result.failures) + len(board_builder_result.errors)
+    
+    print(f"\nTotal Results: {total_passed} passed, {total_failed} failed")
+    
+    if total_failed == 0:
         print("All tests passed! 🎉")
         return 0
     else:

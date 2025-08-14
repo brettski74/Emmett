@@ -17,6 +17,7 @@ PLUGIN_FILES = $(wildcard plugins/*.py) $(wildcard plugins/*.png) $(wildcard res
 
 # Output ZIP file (in build directory)
 ZIP_FILE = $(BUILD_DIR)/$(PLUGIN_NAME)-$(PLUGIN_VERSION).zip
+EMMETT_PLUGIN_ID = com_github_brettski74_emmett
 
 # Default target
 all: package
@@ -53,6 +54,22 @@ test:
 test-pytest:
 	@echo "Running tests with pytest..."
 	@cd .. && python3 -m pytest tests/ -v
+
+install: $(ZIP_FILE)
+	@if [ ! -d "$(KICAD_PLUGIN_DIR)" ]; then \
+	  echo "KICAD_PLUGIN_DIR not specified."; \
+	  false; \
+	fi
+	@echo "Installing into $(KICAD_PLUGIN_DIR)..."
+	@mkdir -p $(KICAD_PLUGIN_DIR)/tmp.$($)
+	@unzip -d $(KICAD_PLUGIN_DIR)/tmp.$($) $(ZIP_FILE)
+	@rm -rf $(KICAD_PLUGIN_DIR)/plugins/$(EMMETT_PLUGIN_ID)
+	@mkdir -p $(KICAD_PLUGIN_DIR)/plugins/$(EMMETT_PLUGIN_ID)
+	@mv -v $(KICAD_PLUGIN_DIR)/tmp.$($)/plugins/* $(KICAD_PLUGIN_DIR)/plugins/$(EMMETT_PLUGIN_ID)/
+	@rm -rf $(KICAD_PLUGIN_DIR)/resources/$(EMMETT_PLUGIN_ID)
+	@mkdir -p $(KICAD_PLUGIN_DIR)/resources/$(EMMETT_PLUGIN_ID)
+	@mv -v $(KICAD_PLUGIN_DIR)/tmp.$($)/resources/* $(KICAD_PLUGIN_DIR)/resources/$(EMMETT_PLUGIN_ID)/
+	@rm -rf $(KICAD_PLUGIN_DIR)/tmp.$($)
 
 # Install development dependencies
 install-dev:

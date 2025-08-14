@@ -13,7 +13,8 @@ from abc import ABC, abstractmethod
 class TraceSegment(ABC):
     """Abstract base class for trace segments."""
     
-    def __init__(self, start_point: Tuple[float, float], end_point: Tuple[float, float], width: float):
+    def __init__(self, start_point: Tuple[float, float], end_point: Tuple[float, float], 
+                 width: float, net: Optional[str] = None):
         """
         Initialize a trace segment.
         
@@ -21,10 +22,22 @@ class TraceSegment(ABC):
             start_point: (x, y) coordinates of start point in meters
             end_point: (x, y) coordinates of end point in meters
             width: Trace width in meters
+            net: Net name for this trace segment (optional)
         """
         self.start_point = start_point
         self.end_point = end_point
         self.width = width
+        self._net = net
+    
+    @property
+    def net(self) -> Optional[str]:
+        """Get the net name for this trace segment."""
+        return self._net
+    
+    @net.setter
+    def net(self, value: Optional[str]):
+        """Set the net name for this trace segment."""
+        self._net = value
     
     @abstractmethod
     def get_length(self) -> float:
@@ -77,8 +90,8 @@ class TraceSegment(ABC):
 class LinearSegment(TraceSegment):
     """Represents a straight line trace segment."""
     
-    def __init__(self, start_point: Tuple[float, float], end_point: Tuple[float, float], 
-                 width: float, calculator: 'TraceSegmentFactory'):
+    def __init__(self, start_point: Tuple[float, float], end_point: Tuple[float, float],
+                 width: float, calculator: 'TraceSegmentFactory', net: Optional[str] = None):
         """
         Initialize a linear segment.
         
@@ -87,8 +100,9 @@ class LinearSegment(TraceSegment):
             end_point: (x, y) coordinates of end point in meters
             width: Trace width in meters
             calculator: Reference to the calculator that created this segment
+            net: Net name for this trace segment (optional)
         """
-        super().__init__(start_point, end_point, width)
+        super().__init__(start_point, end_point, width, net)
         self._calculator = calculator
     
     def get_length(self) -> float:
@@ -102,7 +116,8 @@ class ArcSegment(TraceSegment):
     """Represents an arc trace segment defined by 3 points (start, mid, end)."""
     
     def __init__(self, start_point: Tuple[float, float], mid_point: Tuple[float, float],
-                 end_point: Tuple[float, float], width: float, calculator: 'TraceSegmentFactory'):
+                 end_point: Tuple[float, float], width: float, calculator: 'TraceSegmentFactory', 
+                 net: Optional[str] = None):
         """
         Initialize an arc segment using KiCad's 3-point definition.
         
@@ -112,8 +127,9 @@ class ArcSegment(TraceSegment):
             end_point: (x, y) coordinates of end point in meters
             width: Trace width in meters
             calculator: Reference to the calculator that created this segment
+            net: Net name for this trace segment (optional)
         """
-        super().__init__(start_point, end_point, width)
+        super().__init__(start_point, end_point, width, net)
         self.mid_point = mid_point
         self._calculator = calculator
         
@@ -276,6 +292,11 @@ class TraceSegmentFactory:
     
     Supports both straight line traces and arc traces using the parallel conductor model.
     Acts as a factory for creating trace segments and calculating resistances.
+    
+    The factory can be configured with default parameters (resistivity, thickness, etc.)
+    that will be applied to all segments created by it. The net parameter allows
+    setting a default net name for all segments, which can be overridden on individual
+    segments after creation.
     """
     
     # Default values
@@ -287,7 +308,8 @@ class TraceSegmentFactory:
     def __init__(self, resistivity: Optional[float] = None, 
                  thickness: Optional[float] = None,
                  arc_adjustment_factor: Optional[float] = None,
-                 tcr: Optional[float] = None):
+                 tcr: Optional[float] = None,
+                 net: Optional[str] = None):
         """
         Initialize the resistance calculator.
         
@@ -296,11 +318,13 @@ class TraceSegmentFactory:
             thickness: Copper thickness in meters (defaults to 35 microns)
             arc_adjustment_factor: Multiplier for arc resistance (defaults to 1.1)
             tcr: Temperature coefficient of resistance per °C (defaults to copper)
+            net: Default net name for trace segments created by this factory
         """
         self._resistivity = resistivity or self.DEFAULT_COPPER_RESISTIVITY
         self._thickness = thickness or self.DEFAULT_COPPER_THICKNESS
         self._arc_adjustment_factor = arc_adjustment_factor or self.DEFAULT_ARC_ADJUSTMENT_FACTOR
         self._tcr = tcr or self.DEFAULT_COPPER_TCR
+        self._net = net
     
     @property
     def resistivity(self) -> float:
@@ -340,7 +364,7 @@ class TraceSegmentFactory:
     
     @property
     def tcr(self) -> float:
-        """Get the temperature coefficient of resistance."""
+        """Get the temperature coefficient of resistance per °C."""
         return self._tcr
     
     @tcr.setter
@@ -349,6 +373,16 @@ class TraceSegmentFactory:
         if value <= 0:
             raise ValueError("TCR must be positive")
         self._tcr = value
+    
+    @property
+    def net(self) -> Optional[str]:
+        """Get the default net name for trace segments."""
+        return self._net
+    
+    @net.setter
+    def net(self, value: Optional[str]):
+        """Set the default net name for trace segments."""
+        self._net = value
     
     def create_linear_segment(self, start_point: Tuple[float, float], 
                              end_point: Tuple[float, float], width: float) -> LinearSegment:
@@ -363,7 +397,7 @@ class TraceSegmentFactory:
         Returns:
             LinearSegment instance bound to this calculator
         """
-        return LinearSegment(start_point, end_point, width, self)
+        return LinearSegment(start_point, end_point, width, self, self._net)
     
     def create_arc_segment(self, start_point: Tuple[float, float], 
                           mid_point: Tuple[float, float],
@@ -380,7 +414,7 @@ class TraceSegmentFactory:
         Returns:
             ArcSegment instance bound to this calculator
         """
-        return ArcSegment(start_point, mid_point, end_point, width, self)
+        return ArcSegment(start_point, mid_point, end_point, width, self, self._net)
     
     def calculate_total_resistance(self, segments: List[TraceSegment], temperature_celsius: Optional[float] = None) -> float:
         """
@@ -429,8 +463,8 @@ class TraceSegmentFactory:
 
 # Example usage and testing
 if __name__ == "__main__":
-    # Create a calculator with default parameters
-    calc = TraceSegmentFactory()
+    # Create a factory with default parameters and a net
+    calc = TraceSegmentFactory(net="GND")
     
     # Example: Create some test segments using the factory methods
     # Straight line segment: 10cm long, 2mm wide
@@ -457,6 +491,8 @@ if __name__ == "__main__":
     print(f"Arc segment resistance: {arc_resistance:.6f} Ohms")
     print(f"Total resistance: {total_resistance:.6f} Ohms")
     print(f"Calculator parameters: resistivity={calc.resistivity:.2e} Ω·m, thickness={calc.thickness:.2e} m, arc_factor={calc.arc_adjustment_factor:.2f}, tcr={calc.tcr:.2e}")
+    print(f"Net: {calc.net}")
+    print(f"Segment nets: straight={straight_segment.net}, arc={arc_segment.net}")
     
     # Demonstrate parameter updates affecting all segments
     print("\nUpdating calculator parameters...")
@@ -470,6 +506,26 @@ if __name__ == "__main__":
     print(f"New straight segment resistance: {new_straight_resistance:.6f} Ohms")
     print(f"New arc segment resistance: {new_arc_resistance:.6f} Ohms")
     print(f"New total resistance: {new_total_resistance:.6f} Ohms")
+    
+    # Demonstrate net changes
+    print("\nChanging net on factory...")
+    calc.net = "VCC"
+    print(f"Factory net: {calc.net}")
+    print(f"Existing segment nets unchanged: straight={straight_segment.net}, arc={arc_segment.net}")
+    
+    # Create new segments with new net
+    new_straight_segment = calc.create_linear_segment(
+        start_point=(0.0, 0.0),
+        end_point=(0.05, 0.0),  # 5cm
+        width=0.001  # 1mm
+    )
+    print(f"New segment net: {new_straight_segment.net}")
+    
+    # Demonstrate individual segment net updates
+    print("\nUpdating individual segment nets...")
+    straight_segment.net = "SIGNAL1"
+    arc_segment.net = "SIGNAL2"
+    print(f"Updated segment nets: straight={straight_segment.net}, arc={arc_segment.net}")
     
     # Demonstrate temperature compensation
     print("\n=== Temperature Compensation Demo ===")

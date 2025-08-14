@@ -82,6 +82,10 @@ class BoardAnalyzer:
             end_point = track.GetEnd()
             width = track.GetWidth()
             
+            # Get net information
+            net_info = track.GetNet()
+            net_name = net_info.GetNetname() if net_info else None
+            
             # Convert from KiCad units (nanometers) to meters
             start_m = (start_point.x / 1e9, start_point.y / 1e9)
             end_m = (end_point.x / 1e9, end_point.y / 1e9)
@@ -99,6 +103,9 @@ class BoardAnalyzer:
                     end_point=end_m,
                     width=width_m
                 )
+                # Set the net from the track
+                if net_name:
+                    arc_segment.net = net_name
                 trace_segments.append(arc_segment)
                 
             elif isinstance(track, pcbnew.PCB_TRACK):
@@ -108,6 +115,9 @@ class BoardAnalyzer:
                     end_point=end_m,
                     width=width_m
                 )
+                # Set the net from the track
+                if net_name:
+                    linear_segment.net = net_name
                 trace_segments.append(linear_segment)
         
         return trace_segments
