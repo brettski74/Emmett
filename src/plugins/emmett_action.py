@@ -1,11 +1,13 @@
 import os
 import pcbnew
 import wx
+import traceback
 
 from .trace_segment_factory import TraceSegmentFactory
 from .board_builder import BoardBuilder
 from .board_analyzer import BoardAnalyzer
 from .emmett_form import EmmettForm
+from .al_track_router import AlTrackRouter
 
 class EmmettAction( pcbnew.ActionPlugin ):
  
@@ -21,7 +23,7 @@ class EmmettAction( pcbnew.ActionPlugin ):
         try:
             board = pcbnew.GetBoard()
             if not board:
-                wx.MessageBox("No PCB board is currently loaded.", "Emmett", wx.OK | wx.ICON_INFORMATION)
+                self._info_msg("No PCB board is currently loaded.")
                 return
 
             # Create and show the dialog
@@ -42,14 +44,15 @@ class EmmettAction( pcbnew.ActionPlugin ):
             return
 
         except Exception as e:
-            wx.MessageBox(f"Error launching dialog: {e}", "Emmett Error", wx.OK | wx.ICON_ERROR)
+            self._error_msg(f"Error launching dialog: {e}")
     
     def _find_parent_window(self):
         if self.parent_window is None:
             try:
                 tops = wx.GetTopLevelWindows()
                 for w in tops:
-                    if 'pcbnew' in w.GetTitle().lower() and not 'python' in w.GetTitle().lower():
+                    title = w.GetTitle().lower()
+                    if ('pcbnew' in title or 'pcb editor' in title) and not 'python' in title:
                         self.parent_window = w
                         break
             except:
@@ -57,29 +60,35 @@ class EmmettAction( pcbnew.ActionPlugin ):
         
         return self.parent_window
 
+    def _info_msg(self, msg):
+        wx.MessageBox(msg, "Emmett", wx.OK | wx.ICON_INFORMATION, self._find_parent_window())
+
+    def _error_msg(self, msg):
+        wx.MessageBox(msg, "Emmett Error", wx.OK | wx.ICON_ERROR, self._find_parent_window())
+
     def _handle_generate_clicked(self, dialog, board):
         """Handle when user clicks Generate button."""
         try:
             # Get the currently loaded board
-            # Create the trace segment factory with default copper parameters
-            factory = TraceSegmentFactory()
-            
-            # Create the board analyzer
-            analyzer = BoardAnalyzer(board)
-            
-            # Extract trace segments from the board
-            trace_segments = analyzer.extract_trace_segments(factory, layer_name = "F.Cu")
-  
-            if not trace_segments:
-                wx.MessageBox("No trace segments found on the board.", "Emmett", wx.OK | wx.ICON_INFORMATION)
+            board = pcbnew.GetBoard()
+            if not board:
+                self._info_msg("No PCB board is currently loaded.")
                 return
             
+            factory = TraceSegmentFactory()
+            builder = dialog.builder
+            analyzer = dialog.analyzer
+            router = AlTrackRouter(factory)
+            tracks = router.generate_tracks()
+            #self._info_msg(router.log)
+            builder.add_tracks(tracks)
+
             # Calculate total resistance
-            total_resistance = factory.calculate_total_resistance(trace_segments)
+            total_resistance = factory.calculate_total_resistance(tracks)
             
             # Calculate temperature-compensated resistances
-            resistance_20c = factory.calculate_total_resistance(trace_segments, temperature_celsius=20)
-            resistance_220c = factory.calculate_total_resistance(trace_segments, temperature_celsius=220)
+            resistance_20c = factory.calculate_total_resistance(tracks, temperature_celsius=20)
+            resistance_220c = factory.calculate_total_resistance(tracks, temperature_celsius=220)
             
             # Format the resistance values with appropriate units
             def format_resistance(resistance):
@@ -93,30 +102,21 @@ class EmmettAction( pcbnew.ActionPlugin ):
             resistance_20c_text = format_resistance(resistance_20c)
             resistance_220c_text = format_resistance(resistance_220c)
             
-            # Get board info for context
-            board_info = analyzer.get_board_info()
-            
             # Create detailed message with temperature information
             message = f"Trace resistance analysis:\n\n"
             message += f"At 20°C (room temperature): {resistance_20c_text}\n"
             message += f"At 220°C (operating temperature): {resistance_220c_text}\n\n"
-            message += f"Board: {board_info['filename']}\n"
-            message += f"Trace segments: {len(trace_segments)}\n"
-            message += f"Copper layers: {board_info['layers']}\n"
-            message += f"Total tracks: {board_info['tracks_count']}"
             
-            wx.MessageBox(message, "Emmett Element Router", wx.OK | wx.ICON_INFORMATION)
+            self._info_msg(message)
             
         except Exception as e:
-            wx.MessageBox(f"Error analyzing board: {e}", "Emmett Error", wx.OK | wx.ICON_ERROR)
+            msg = f"Error doing the shit you asked on this board: {e}"
+            msg += f"\n{traceback.format_exc()}"
+            self._error_msg(msg)
     
     def _handle_apply_clicked(self, dialog, board):
         """Handle when user clicks Apply button."""
-        try:
-            # Similar to generate but keep dialog open
-            # For now, just show a message
-            wx.MessageBox("Apply functionality not yet implemented.", "Emmett", wx.OK | wx.ICON_INFORMATION)
-        except Exception as e:
-            wx.MessageBox(f"Error applying changes: {e}", "Emmett Error", wx.OK | wx.ICON_ERROR)
+        pass
+
 
 

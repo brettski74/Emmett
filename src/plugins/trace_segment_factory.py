@@ -5,13 +5,25 @@ This module provides classes for creating trace segments and calculating
 their resistance using accurate physical models.
 """
 
+import wx
+
+import pcbnew
+
 import math
 from typing import List, Tuple, Union, Optional
 from abc import ABC, abstractmethod
 
+from .vector_utils import add_vec, sub_vec, scale_vec, shrink_vec, normalize_vec, perp_vec, invert_vec, x_mirror_vec, y_mirror_vec
+
+KICAD_MM = 1e3
+KICAD_UNITS = 1e9
 
 class TraceSegment(ABC):
-    """Abstract base class for trace segments."""
+    """
+    Abstract base class for trace segments.
+
+    All measurements are in metres to make the resistance calculations easier to follow.
+    """
     
     def __init__(self, start_point: Tuple[float, float], end_point: Tuple[float, float], 
                  width: float, net: Optional[str] = None):
@@ -39,6 +51,16 @@ class TraceSegment(ABC):
         """Set the net name for this trace segment."""
         self._net = value
     
+    @abstractmethod
+    def move(self, offset: Tuple[float, float]):
+        """Move the track by the given offset."""
+        pass
+
+    @abstractmethod
+    def plot(self, board: pcbnew.BOARD, offset: Optional[Tuple[float, float]] = None):
+        """Plot the track on the board."""
+        pass
+
     @abstractmethod
     def get_length(self) -> float:
         """Get the length of the trace segment in meters."""
@@ -75,14 +97,14 @@ class TraceSegment(ABC):
         """
         length = self.get_length()
         width = self.get_width()
-        cross_sectional_area = width * self._calculator.thickness
+        cross_sectional_area = width * self._factory.thickness
         
         # R = ρ * L / A
-        resistance = self._calculator.resistivity * length / cross_sectional_area
+        resistance = self._factory.resistivity * length / cross_sectional_area
         
         # Apply temperature coefficient of resistance if temperature provided
         if temperature_celsius is not None:
-            resistance = self._calculator._apply_temperature_adjustment(resistance, temperature_celsius)
+            resistance = self._factory._apply_temperature_adjustment(resistance, temperature_celsius)
         
         return resistance
 
@@ -91,7 +113,7 @@ class LinearSegment(TraceSegment):
     """Represents a straight line trace segment."""
     
     def __init__(self, start_point: Tuple[float, float], end_point: Tuple[float, float],
-                 width: float, calculator: 'TraceSegmentFactory', net: Optional[str] = None):
+                 width: float, factory: 'TraceSegmentFactory', net: Optional[str] = None):
         """
         Initialize a linear segment.
         
@@ -99,11 +121,11 @@ class LinearSegment(TraceSegment):
             start_point: (x, y) coordinates of start point in meters
             end_point: (x, y) coordinates of end point in meters
             width: Trace width in meters
-            calculator: Reference to the calculator that created this segment
+            factory: Reference to the factory that created this segment
             net: Net name for this trace segment (optional)
         """
         super().__init__(start_point, end_point, width, net)
-        self._calculator = calculator
+        self._factory = factory
     
     def get_length(self) -> float:
         """Calculate the length of the straight line segment."""
@@ -111,12 +133,48 @@ class LinearSegment(TraceSegment):
         dy = self.end_point[1] - self.start_point[1]
         return math.sqrt(dx*dx + dy*dy)
     
+    def move_start(self, offset: Tuple[float, float]):
+        """Move the start point of the segment by the given offset."""
+        self.start_point = (self.start_point[0] + offset[0], self.start_point[1] + offset[1])
+    
+    def move_end(self, offset: Tuple[float, float]):
+        """Move the end point of the segment by the given offset."""
+        self.end_point = (self.end_point[0] + offset[0], self.end_point[1] + offset[1])
+
+    def move(self, offset: Tuple[float, float]):
+        """Move the start and end points of the segment by the given offset."""
+        self.move_start(offset)
+        self.move_end(offset)
+
+    def plot(self, board: pcbnew.BOARD, offset: Optional[Tuple[float, float]] = None):
+        """Plot the track on the board."""
+        if offset is None:
+            offset = (0.0, 0.0)
+
+        start = scale_vec(add_vec(self.start_point, offset), KICAD_MM)
+        end = scale_vec(add_vec(self.end_point, offset), KICAD_MM)
+        w = self.width * KICAD_MM
+
+        #wx.MessageBox(f"Plotting linear segment from {start} to {end} with width {w}", "Emmett", wx.OK | wx.ICON_INFORMATION)
+
+        track = pcbnew.PCB_TRACK(board)
+        track.SetStart(pcbnew.VECTOR2I_MM(start[0], start[1]))
+        track.SetEnd(pcbnew.VECTOR2I_MM(end[0], end[1]))
+        track.SetWidth(pcbnew.FromMM(w))
+
+        # Set net if segment has one
+        if self.net:
+            net_info = board.GetNetInfo(self.net)
+            if net_info:
+                track.SetNet(net_info)
+        
+        board.Add(track)
 
 class ArcSegment(TraceSegment):
     """Represents an arc trace segment defined by 3 points (start, mid, end)."""
     
     def __init__(self, start_point: Tuple[float, float], mid_point: Tuple[float, float],
-                 end_point: Tuple[float, float], width: float, calculator: 'TraceSegmentFactory', 
+                 end_point: Tuple[float, float], width: float, factory: 'TraceSegmentFactory', 
                  net: Optional[str] = None):
         """
         Initialize an arc segment using KiCad's 3-point definition.
@@ -126,12 +184,12 @@ class ArcSegment(TraceSegment):
             mid_point: (x, y) coordinates of mid point in meters
             end_point: (x, y) coordinates of end point in meters
             width: Trace width in meters
-            calculator: Reference to the calculator that created this segment
+            factory: Reference to the factory that created this segment
             net: Net name for this trace segment (optional)
         """
         super().__init__(start_point, end_point, width, net)
         self.mid_point = mid_point
-        self._calculator = calculator
+        self._factory = factory
         
         # Calculate geometric properties from the 3 points
         self.center = self._calculate_center()
@@ -140,6 +198,35 @@ class ArcSegment(TraceSegment):
         self.end_angle = self._calculate_end_angle()
         self._arc_length = self._calculate_arc_length()
     
+    def plot(self, board: pcbnew.BOARD, offset: Optional[Tuple[float, float]] = None):
+        """Plot the track on the board."""
+        if offset is None:
+            offset = (0.0, 0.0)
+
+        start = scale_vec(add_vec(self.start_point, offset), KICAD_MM)
+        mid = scale_vec(add_vec(self.mid_point, offset), KICAD_MM)
+        end = scale_vec(add_vec(self.end_point, offset), KICAD_MM)
+        
+        track = pcbnew.PCB_ARC(board)
+        track.SetStart(pcbnew.VECTOR2I_MM(start[0], start[1]))
+        track.SetMid(pcbnew.VECTOR2I_MM(mid[0], mid[1]))
+        track.SetEnd(pcbnew.VECTOR2I_MM(end[0], end[1]))
+        track.SetWidth(pcbnew.FromMM(self.width * KICAD_MM))
+
+        # Set net if segment has one
+        if self.net:
+            net_info = board.GetNetInfo(self.net)
+            if net_info:
+                track.SetNet(net_info)
+        
+        board.Add(track)
+
+    def move(self, offset: Tuple[float, float]):
+        """Move the start and end points of the segment by the given offset."""
+        self.start_point = (self.start_point[0] + offset[0], self.start_point[1] + offset[1])
+        self.mid_point = (self.mid_point[0] + offset[0], self.mid_point[1] + offset[1])
+        self.end_point = (self.end_point[0] + offset[0], self.end_point[1] + offset[1])
+
     def _calculate_center(self) -> Tuple[float, float]:
         """
         Calculate the center of the arc from 3 points.
@@ -274,14 +361,14 @@ class ArcSegment(TraceSegment):
         
         # Calculate resistance using the correct formula
         # R = ρ × θ / (thickness × ln(R_outer / R_inner))
-        base_resistance = (self._calculator.resistivity * angle_diff) / (self._calculator.thickness * math.log(outer_radius / inner_radius))
+        base_resistance = (self._factory.resistivity * angle_diff) / (self._factory.thickness * math.log(outer_radius / inner_radius))
         
         # Apply adjustment factor to account for model limitations
-        adjusted_resistance = base_resistance * self._calculator.arc_adjustment_factor
+        adjusted_resistance = base_resistance * self._factory.arc_adjustment_factor
         
         # Apply temperature coefficient of resistance if temperature provided
         if temperature_celsius is not None:
-            adjusted_resistance = self._calculator._apply_temperature_adjustment(adjusted_resistance, temperature_celsius)
+            adjusted_resistance = self._factory._apply_temperature_adjustment(adjusted_resistance, temperature_celsius)
         
         return adjusted_resistance
 
@@ -311,7 +398,7 @@ class TraceSegmentFactory:
                  tcr: Optional[float] = None,
                  net: Optional[str] = None):
         """
-        Initialize the resistance calculator.
+        Initialize the factory.
         
         Args:
             resistivity: Copper resistivity in Ohm-meters (defaults to copper at 20°C)
@@ -395,7 +482,7 @@ class TraceSegmentFactory:
             width: Trace width in meters
             
         Returns:
-            LinearSegment instance bound to this calculator
+            LinearSegment instance bound to this factory
         """
         return LinearSegment(start_point, end_point, width, self, self._net)
     
@@ -412,7 +499,7 @@ class TraceSegmentFactory:
             width: Trace width in meters
             
         Returns:
-            ArcSegment instance bound to this calculator
+            ArcSegment instance bound to this factory
         """
         return ArcSegment(start_point, mid_point, end_point, width, self, self._net)
     
@@ -490,12 +577,12 @@ if __name__ == "__main__":
     print(f"Straight segment resistance: {straight_resistance:.6f} Ohms")
     print(f"Arc segment resistance: {arc_resistance:.6f} Ohms")
     print(f"Total resistance: {total_resistance:.6f} Ohms")
-    print(f"Calculator parameters: resistivity={calc.resistivity:.2e} Ω·m, thickness={calc.thickness:.2e} m, arc_factor={calc.arc_adjustment_factor:.2f}, tcr={calc.tcr:.2e}")
+    print(f"factory parameters: resistivity={calc.resistivity:.2e} Ω·m, thickness={calc.thickness:.2e} m, arc_factor={calc.arc_adjustment_factor:.2f}, tcr={calc.tcr:.2e}")
     print(f"Net: {calc.net}")
     print(f"Segment nets: straight={straight_segment.net}, arc={arc_segment.net}")
     
     # Demonstrate parameter updates affecting all segments
-    print("\nUpdating calculator parameters...")
+    print("\nUpdating factory parameters...")
     calc.thickness = 70e-6  # Change to 70μm thickness
     
     # Recalculate - no need to pass new parameters!
@@ -544,9 +631,9 @@ if __name__ == "__main__":
     
     # Demonstrate configurable TCR
     print(f"\n=== Configurable TCR Demo ===")
-    print("Creating calculator with different TCR (e.g., for different material):")
+    print("Creating factory with different TCR (e.g., for different material):")
     
-    # Create calculator with different TCR (e.g., for aluminum)
+    # Create factory with different TCR (e.g., for aluminum)
     calc_aluminum = TraceSegmentFactory(tcr=0.00429)  # Aluminum TCR
     print(f"Aluminum TCR: {calc_aluminum.tcr:.5f} per °C")
     

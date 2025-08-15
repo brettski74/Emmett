@@ -5,10 +5,13 @@ This module provides functionality to clear existing tracks and add new ones
 based on TraceSegment objects.
 """
 
+import wx
 import pcbnew
 from typing import List, Optional, Tuple
-from .trace_segment_factory import TraceSegment, LinearSegment, ArcSegment
+from .trace_segment_factory import TraceSegment
 
+MM_UNITS = 1e3
+KICAD_UNITS = 1e9
 
 class BoardBuilder:
     """
@@ -18,6 +21,7 @@ class BoardBuilder:
     based on TraceSegment objects. Each TraceSegment can have its own net
     property, allowing for multi-net trace routing.
     """
+
     
     def __init__(self, board: pcbnew.BOARD):
         """
@@ -70,7 +74,7 @@ class BoardBuilder:
         return len(tracks_to_remove)
     
     def add_tracks(self, trace_segments: List[TraceSegment], 
-                   x_offset: float = 0.0, y_offset: float = 0.0,
+                   offset: Tuple[float, float] = (0.0, 0.0),
                    layer: str = "F.Cu") -> int:
         """
         Add tracks to the board based on TraceSegment objects.
@@ -96,54 +100,10 @@ class BoardBuilder:
         
         for segment in trace_segments:
             # Apply offset to segment coordinates
-            start_point = self._apply_offset(segment.start_point, x_offset, y_offset)
-            end_point = self._apply_offset(segment.end_point, x_offset, y_offset)
-            
-            # Convert from meters to KiCad units (nanometers)
-            start_nm = (int(start_point[0] * 1e9), int(start_point[1] * 1e9))
-            end_nm = (int(end_point[0] * 1e9), int(end_point[1] * 1e9))
-            width_nm = int(segment.width * 1e9)
-            
-            if isinstance(segment, LinearSegment):
-                # Create a straight line track
-                track = pcbnew.PCB_TRACK(self.board)
-                track.SetStart(pcbnew.VECTOR2I(start_nm[0], start_nm[1]))
-                track.SetEnd(pcbnew.VECTOR2I(end_nm[0], end_nm[1]))
-                track.SetWidth(width_nm)
-                track.SetLayer(layer_number)
+            segment.plot(self.board, offset)
+
+            tracks_added += 1
                 
-                # Set net if segment has one
-                if segment.net:
-                    net_info = self.board.GetNetInfo(segment.net)
-                    if net_info:
-                        track.SetNet(net_info)
-                
-                self.board.Add(track)
-                tracks_added += 1
-                
-            elif isinstance(segment, ArcSegment):
-                # Create an arc track
-                arc = pcbnew.PCB_ARC(self.board)
-                arc.SetStart(pcbnew.VECTOR2I(start_nm[0], start_nm[1]))
-                arc.SetEnd(pcbnew.VECTOR2I(end_nm[0], end_nm[1]))
-                
-                # Apply offset to mid point for arc
-                mid_point = self._apply_offset(segment.mid_point, x_offset, y_offset)
-                mid_nm = (int(mid_point[0] * 1e9), int(mid_point[1] * 1e9))
-                arc.SetMid(pcbnew.VECTOR2I(mid_nm[0], mid_nm[1]))
-                
-                arc.SetWidth(width_nm)
-                arc.SetLayer(layer_number)
-                
-                # Set net if segment has one
-                if segment.net:
-                    net_info = self.board.GetNetInfo(segment.net)
-                    if net_info:
-                        arc.SetNet(net_info)
-                
-                self.board.Add(arc)
-                tracks_added += 1
-        
         # Refresh the board
         self.board.BuildConnectivity()
         

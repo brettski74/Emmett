@@ -17,6 +17,8 @@ class BoardAnalyzer:
     This class extracts trace segments from the currently loaded PCB
     and converts them to our trace segment model for analysis.
     """
+
+    KICAD_UNITS = 1e9
     
     def __init__(self, board: pcbnew.BOARD):
         """
@@ -87,15 +89,15 @@ class BoardAnalyzer:
             net_name = net_info.GetNetname() if net_info else None
             
             # Convert from KiCad units (nanometers) to meters
-            start_m = (start_point.x / 1e9, start_point.y / 1e9)
-            end_m = (end_point.x / 1e9, end_point.y / 1e9)
-            width_m = width / 1e9
+            start_m = (start_point.x / self.KICAD_UNITS, start_point.y / self.KICAD_UNITS)
+            end_m = (end_point.x / self.KICAD_UNITS, end_point.y / self.KICAD_UNITS)
+            width_m = width / self.KICAD_UNITS
             
             # Check if this is an arc
             if isinstance(track, pcbnew.PCB_ARC):
                 # This is an arc - get the mid point directly from KiCad
                 mid_point = track.GetMid()
-                mid_m = (mid_point.x / 1e9, mid_point.y / 1e9)
+                mid_m = (mid_point.x / self.KICAD_UNITS, mid_point.y / self.KICAD_UNITS)
                 
                 arc_segment = factory.create_arc_segment(
                     start_point=start_m,

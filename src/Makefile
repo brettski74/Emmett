@@ -6,6 +6,7 @@ PLUGIN_NAME = emmett
 PLUGIN_VERSION = 1.0.0
 PLUGIN_AUTHOR = Your Name
 PLUGIN_DESCRIPTION = Route PCB elements with Emmett Element Router
+PID = $(shell echo $$PPID)
 
 # Build directory (separate from source)
 BUILD_DIR = ../build
@@ -61,15 +62,15 @@ install: $(ZIP_FILE)
 	  false; \
 	fi
 	@echo "Installing into $(KICAD_PLUGIN_DIR)..."
-	@mkdir -p $(KICAD_PLUGIN_DIR)/tmp.$($)
-	@unzip -d $(KICAD_PLUGIN_DIR)/tmp.$($) $(ZIP_FILE)
-	@rm -rf $(KICAD_PLUGIN_DIR)/plugins/$(EMMETT_PLUGIN_ID)
+	@mkdir -p $(KICAD_PLUGIN_DIR)/tmp.$(PID)
+	@unzip -d $(KICAD_PLUGIN_DIR)/tmp.$(PID) $(ZIP_FILE)
+	@rm -rvf $(KICAD_PLUGIN_DIR)/plugins/$(EMMETT_PLUGIN_ID)
 	@mkdir -p $(KICAD_PLUGIN_DIR)/plugins/$(EMMETT_PLUGIN_ID)
-	@mv -v $(KICAD_PLUGIN_DIR)/tmp.$($)/plugins/* $(KICAD_PLUGIN_DIR)/plugins/$(EMMETT_PLUGIN_ID)/
-	@rm -rf $(KICAD_PLUGIN_DIR)/resources/$(EMMETT_PLUGIN_ID)
+	@mv -v $(KICAD_PLUGIN_DIR)/tmp.$(PID)/plugins/* $(KICAD_PLUGIN_DIR)/plugins/$(EMMETT_PLUGIN_ID)/
+	@rm -rvf $(KICAD_PLUGIN_DIR)/resources/$(EMMETT_PLUGIN_ID)
 	@mkdir -p $(KICAD_PLUGIN_DIR)/resources/$(EMMETT_PLUGIN_ID)
-	@mv -v $(KICAD_PLUGIN_DIR)/tmp.$($)/resources/* $(KICAD_PLUGIN_DIR)/resources/$(EMMETT_PLUGIN_ID)/
-	@rm -rf $(KICAD_PLUGIN_DIR)/tmp.$($)
+	@mv -v $(KICAD_PLUGIN_DIR)/tmp.$(PID)/resources/* $(KICAD_PLUGIN_DIR)/resources/$(EMMETT_PLUGIN_ID)/
+	@rm -rvf $(KICAD_PLUGIN_DIR)/tmp.$(PID)
 
 # Install development dependencies
 install-dev:
