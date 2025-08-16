@@ -29,3 +29,9 @@ def x_mirror_vec(v1: Tuple[float, float]) -> Tuple[float, float]:
 
 def y_mirror_vec(v1: Tuple[float, float]) -> Tuple[float, float]:
     return (v1[0], -v1[1])
+
+def distance(v1: Tuple[float, float], v2: Tuple[float, float]) -> float:
+    dx = v1[0] - v2[0]
+    dy = v1[1] - v2[1]
+
+    return sqrt(dx*dx + dy*dy)

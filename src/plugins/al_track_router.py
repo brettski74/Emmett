@@ -5,15 +5,15 @@ This module provides a basic track router that demonstrates how to implement
 the abstract TrackRouter class.
 """
 import wx
-from math import sqrt, ceil
+from math import sqrt, ceil, fabs
 
 import pcbnew
 
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from .track_router import TrackRouter
 from .trace_segment_factory import TraceSegment, TraceSegmentFactory, ArcSegment
-from .pad_defs import RectangularPad
-from .vector_utils import shrink_vec, add_vec
+from .pad_defs import RectangularPad, CircularPad
+from .vector_utils import scale_vec, shrink_vec, add_vec, sub_vec, distance, perp_vec, normalize_vec
 
 class AlTrackRouter(TrackRouter):
     """
@@ -25,6 +25,7 @@ class AlTrackRouter(TrackRouter):
 
     def __init__(self, factory: TraceSegmentFactory):
         super().__init__(factory)
+        #self.width = 1000
         self.width = 1000
         self.spacing = 200
         self.top = 40000
@@ -33,10 +34,12 @@ class AlTrackRouter(TrackRouter):
         self.right = 200000
         self.margin = 500
         self.pitch = self.width + self.spacing
-        self.fuse = (RectangularPad(150000,79500,5000,6000,500), RectangularPad(150000,100500,5000,6000,500))
-        self.connections = (RectangularPad(143000,43500,5000,6000,250), RectangularPad(157000,43500,5000,6000,250))
+        self.fuse = (RectangularPad(150000,79500,5000,6000,250), RectangularPad(150000,100500,5000,6000,250))
+        self.connections = (RectangularPad(143000,43500,4000,6000,300), RectangularPad(157000,43500,4000,6000,300))
+        self.holes = (CircularPad(104000,44000,4500,500), CircularPad(196000,44000,4500,500), CircularPad(104000,136000,4500,500), CircularPad(196000,136000,4500,500))
+        self.parent = None
 
-        self.ystart = self.top + self.margin + self.pitch + self.pitch
+        self.ystart = self.top + self.margin + self.pitch + self.width + self.spacing/2
         self.yend = self.bottom - self.margin - self.pitch
 
     def update_board(self, board: pcbnew.BOARD):
@@ -44,6 +47,9 @@ class AlTrackRouter(TrackRouter):
         Update the board with the generated tracks.
         """
         pass
+
+    def _info_msg(self, msg):
+        wx.MessageBox(msg, "Emmett", wx.OK | wx.ICON_INFORMATION, self.parent)
 
     def generate_fuse_in_tracks(self) -> List[TraceSegment]:
         """
@@ -138,14 +144,18 @@ class AlTrackRouter(TrackRouter):
         )
 
         count = int(self.even_tracks_over(self.connections[0].clear_width(), self.pitch) / 2)
-        ylimit = (self.top + self.margin + self.connections[0].clear_height() - self.width/2) / 1e6
+        ylimit = (self.top + self.margin + self.connections[0].clear_height() + self.width/2) / 1e6
         pitch = self.pitch / 1e6
 
+        pad = 0
         for i in range(count):
             n = i*4 + 3
             arc = result[n]
-            offset = arc.mid_point[1] - ylimit
+            offset = ylimit - arc.mid_point[1]
+            pad += arc.mid_point[0]
             self.shorten_track_pair(result, n, offset)
+
+        pad = pad * 1e6 / count
 
         result[0].move_start((0, -pitch))
 
@@ -155,6 +165,7 @@ class AlTrackRouter(TrackRouter):
         count = self.even_tracks_under(width, self.pitch)
         ystart = centre - (count-1)*self.pitch/2
 
+        self._info_msg(f"fuse_left: {self.fuse_left}, fuse_right: {self.fuse_right}, ystart: {ystart}, width: {width}, centre: {centre}, count: {count}")
         tracks = self.serpentine_track(
             (self.fuse_left - self.pitch/2, ystart),
             (self.fuse_right - self.pitch/2, ystart),
@@ -170,7 +181,48 @@ class AlTrackRouter(TrackRouter):
         tracks.append(self.corner_90(tracks[0].start_point, add_vec(tracks[0].start_point, (-pitch/2, -pitch/2))))
         result[0].end_point = tracks[-1].end_point
 
+        hole = self.holes[0]
+
+        # Create linear tracks from the pad
+        y = self.top + self.margin + self.width/2
+        rsum = hole.clear_radius() + 2*self.pitch
+        yc = y + 1.5 * self.pitch
+        dy = hole.y - yc
+        dx = sqrt(rsum*rsum - dy*dy)
+        x = hole.x + dx
+        line = normalize_vec((-dx, dy), 1.5*self.pitch)
+        start = (x, y);
+        self.left_pad = (pad, y + self.connections[0].height/2)
+        elbow = (pad, y)
+        tracks.append(self.factory.create_linear_segment(scale_vec(start, 1e-6), scale_vec(elbow, 1e-6), self.width * 1e-6))
+        tracks.append(self.factory.create_linear_segment(scale_vec(elbow, 1e-6), scale_vec(self.left_pad, 1e-6), self.width * 1e-6))
+
+        # Create arcs around edge of left top hole
+        end = add_vec((x, yc), line)
+        mid = add_vec((x, yc), normalize_vec(perp_vec(sub_vec(start, end)), 1.5*self.pitch))
+        tracks.append(self.factory.create_arc_segment(scale_vec(start, 1e-6), scale_vec(mid, 1e-6), scale_vec(end, 1e-6), self.width / 1e6))
+
+        x = result[-1].end_point[0] * 1e6
+        xc = x + 1.5 * self.pitch
+        dx = xc - hole.x
+        dy = sqrt(rsum*rsum - dx*dx)
+        y = hole.y + dy
+        result[-1].move_end((0, y*1e-6 - result[-1].end_point[1]))
+        line = normalize_vec((-dx, -dy), 1.5*self.pitch)
+        end = add_vec((xc, y), line)
+        mid = add_vec((xc, y), normalize_vec(perp_vec(sub_vec(start, end)), 1.5*self.pitch))
+        tracks.append(self.factory.create_arc_segment(result[-1].end_point, scale_vec(mid, 1e-6), scale_vec(end, 1e-6), self.width / 1e6))
+
+        start = tracks[-1].end_point
+        end = tracks[-2].end_point
+        radius = hole.clear_radius() + self.pitch/2
+        mid = add_vec((hole.x * 1e-6, hole.y * 1e-6), normalize_vec(perp_vec(sub_vec(start, end)), 1e-6 * radius))
+        tracks.append(self.factory.create_arc_segment(start, mid, end, self.width / 1e6))
+
         result.extend(tracks)
+
+        self.avoid_hole(result, hole, hole.clear_radius() + self.pitch)
+        self.avoid_hole(result, self.holes[2])
 
         return result
 
@@ -195,13 +247,64 @@ class AlTrackRouter(TrackRouter):
         )
 
         count = int(self.even_tracks_over(self.connections[1].clear_width(), self.pitch) / 2)
-        ylimit = (self.top + self.margin + self.connections[0].clear_height() - self.width/2) / 1e6
+        ylimit = (self.top + self.margin + self.connections[0].clear_height() + self.width/2) / 1e6
+
+        pad = 0
 
         for i in range(count):
             n = i*4 + 1
             arc = result[n]
-            offset = arc.mid_point[1] - ylimit
+            offset = ylimit - arc.mid_point[1]
+            pad += arc.mid_point[0]
             self.shorten_track_pair(result, n, offset)
+
+        pad = pad * 1e6 / count
+
+        hole = self.holes[1]
+
+        # TODO: A lot of repetition of left side calculations here. Would be good to try to make
+        # this more reusable and only write it once.
+        y = self.top + self.margin + self.width/2
+        rsum = hole.clear_radius() + 2*self.pitch
+        yc = y + 1.5 * self.pitch
+        dy = hole.y - yc
+        dx = sqrt(rsum*rsum - dy*dy)
+        x = hole.x - dx
+        line = normalize_vec((dx, dy), 1.5*self.pitch)
+        start = (x, y);
+        self.right_pad = (pad, y + self.connections[1].height/2)
+        elbow = (pad, y)
+        tracks = [
+            self.factory.create_linear_segment(scale_vec(start, 1e-6), scale_vec(elbow, 1e-6), self.width * 1e-6),
+            self.factory.create_linear_segment(scale_vec(elbow, 1e-6), scale_vec(self.right_pad, 1e-6), self.width * 1e-6)
+        ]
+
+        # Create arcs around edge of right top hole
+        end = add_vec((x, yc), line)
+        mid = add_vec((x, yc), normalize_vec(perp_vec(sub_vec(end, start)), 1.5*self.pitch))
+        tracks.append(self.factory.create_arc_segment(scale_vec(start, 1e-6), scale_vec(mid, 1e-6), scale_vec(end, 1e-6), self.width / 1e6))
+
+        x = result[-1].end_point[0] * 1e6
+        xc = x - 1.5 * self.pitch
+        dx = hole.x - xc
+        dy = sqrt(rsum*rsum - dx*dx)
+        y = hole.y + dy
+        result[-1].move_end((0, y*1e-6 - result[-1].end_point[1]))
+        line = normalize_vec((dx,-dy), 1.5*self.pitch)
+        end = add_vec((xc, y), line)
+        mid = add_vec((xc, y), normalize_vec(perp_vec(sub_vec(end, start)), 1.5*self.pitch))
+        tracks.append(self.factory.create_arc_segment(result[-1].end_point, scale_vec(mid, 1e-6), scale_vec(end, 1e-6), self.width / 1e6))
+
+        start = tracks[-1].end_point
+        end = tracks[-2].end_point
+        radius = hole.clear_radius() + self.pitch/2
+        mid = add_vec((hole.x * 1e-6, hole.y * 1e-6), normalize_vec(perp_vec(sub_vec(end, start)), 1e-6 * radius))
+        tracks.append(self.factory.create_arc_segment(start, mid, end, self.width / 1e6))
+
+        self.avoid_hole(result, hole, hole.clear_radius() + self.pitch)
+        self.avoid_hole(result, self.holes[3])
+
+        result.extend(tracks)
 
         return result
 
@@ -225,12 +328,56 @@ class AlTrackRouter(TrackRouter):
 
         self.right_count = self.total_count - self.left_count - self.fuse_count
 
-        wx.MessageBox(f"total_count: {self.total_count}, fuse_count: {self.fuse_count}, left_count: {self.left_count}, right_count: {self.right_count}")
+        #wx.MessageBox(f"total_count: {self.total_count}, fuse_count: {self.fuse_count}, left_count: {self.left_count}, right_count: {self.right_count}")
 
         self.fuse_left = self.fuse[0].x - (self.fuse_count-1)*self.pitch/2
         self.fuse_right = self.fuse[0].x + (self.fuse_count-1)*self.pitch/2
 
         return self.generate_fuse_in_tracks() + self.generate_fuse_out_tracks() + self.generate_left_tracks() + self.generate_right_tracks()
+
+    def avoid_hole(self, tracks: List[TraceSegment], hole: CircularPad, clearance: Optional[float] = -1.0):
+        """
+        Adjust tracks to avoid a hole.
+        """
+        if clearance <= 0.0:
+            clearance = hole.clear_radius()
+        
+        clearance += self.pitch
+        cl2 = clearance * clearance
+        ycentre = (self.top + self.bottom) / 2
+        left = hole.x - clearance
+        right = hole.x + clearance
+
+        hc = (hole.x, hole.y)
+
+        # Still need distance check because the x-coordinate alone may pick up corners at the wrond end.
+        # sqrt(2) * clearance should catch everything. 1.5 x gives a little extra margin while still
+        # avoiding incorrectly picking up corners at the wrong end,
+        close = clearance * 1.5
+
+        for i in range(len(tracks)):
+            if type(tracks[i]) != ArcSegment:
+                continue
+
+            t = tracks[i]
+
+            if t.start_point[1] != t.end_point[1]:
+                continue
+            
+            centre = (t.mid_point[0] * 1e6, t.start_point[1] * 1e6)
+            d = distance(centre, hc)
+
+            if left <= centre[0] <= right and d < close:
+                dx = hc[0] - centre[0]
+                dy = sqrt(cl2 - dx*dx)
+
+                if hc[1] < ycentre:
+                    y = hc[1] + dy
+                else:
+                    y = hc[1] - dy
+
+                ddy = y/1e6 - t.start_point[1]
+                self.shorten_track_pair(tracks, i, fabs(ddy));
 
     def corner_90(self, start: Tuple[float, float], end: Tuple[float, float]) -> TraceSegment:
         """
@@ -264,11 +411,9 @@ class AlTrackRouter(TrackRouter):
         arc = result[index]
         out = result[index+1]
 
-        if arc.start_point[1] > arc.mid_point[1]:
-            arc.move((0, -offset))
-            inl.move_end((0, -offset))
-            out.move_start((0, -offset))
-        else:
-            arc.move((0, offset))
-            inl.move_end((0, offset))
-            out.move_start((0, offset))
+        if arc.start_point[1] < arc.mid_point[1]:
+            offset = -offset
+
+        arc.move((0, offset))
+        inl.move_end((0, offset))
+        out.move_start((0, offset))

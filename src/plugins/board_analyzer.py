@@ -9,7 +9,6 @@ import pcbnew
 from typing import List, Tuple, Optional, Union
 from .trace_segment_factory import TraceSegmentFactory, TraceSegment, LinearSegment, ArcSegment
 
-
 class BoardAnalyzer:
     """
     Analyzes loaded KiCad PCB layouts to extract trace information.
@@ -18,8 +17,6 @@ class BoardAnalyzer:
     and converts them to our trace segment model for analysis.
     """
 
-    KICAD_UNITS = 1e9
-    
     def __init__(self, board: pcbnew.BOARD):
         """
         Initialize the board analyzer.
@@ -28,6 +25,42 @@ class BoardAnalyzer:
             board: KiCad board object to analyze
         """
         self.board = board
+    
+    def get_extents(self) -> Tuple[float, float, float, float]:
+        """
+        Get the extents of the board.
+        """
+        box = self.board.GetBoardEdgesBoundingBox()
+
+        return (
+            box.GetLeft() / self.KICAD_UNITS,
+            box.GetTop() / self.KICAD_UNITS,
+            box.GetRight() / self.KICAD_UNITS,
+            box.GetBottom() / self.KICAD_UNITS
+        )
+    
+    def get_closest_pad(self, point: Tuple[float, float], layer: str) -> RectangularPad:
+        """
+        Get the closest pad to a point.
+        """
+        pads = self.board.GetPads()
+        closest = None
+        closest_distance = float('inf')
+
+        for pad in pads:
+            if pad.GetLayerSet().Contains(layer_id):
+                distance = distance(point, (pad.GetPosition().x, pad.GetPosition().y))
+                if distance < closest_distance:
+                    closest = pad
+                    closest_distance = distance
+
+        if closest is None:
+            raise Exception(f"No pad found on layer {layer} near {point}")
+
+        # Return a RectangularPad object representing the location of the pad and it's size
+        # and courtyard size
+
+        return closest
     
     def extract_trace_segments(self, factory: TraceSegmentFactory, 
                               layer_name: Optional[str] = None,

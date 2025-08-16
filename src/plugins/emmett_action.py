@@ -79,6 +79,7 @@ class EmmettAction( pcbnew.ActionPlugin ):
             builder = dialog.builder
             analyzer = dialog.analyzer
             router = AlTrackRouter(factory)
+            router.parent = self.parent_window
             tracks = router.generate_tracks()
             #self._info_msg(router.log)
             builder.add_tracks(tracks)

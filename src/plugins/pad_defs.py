@@ -46,6 +46,7 @@ class CircularPad:
     self.x = x
     self.y = y
     self.radius = radius
+    self.courtyard = courtyard
 
   def __str__(self):
     return f"CircularPad(x={self.x}, y={self.y}, radius={self.radius})"
