@@ -9,11 +9,20 @@ from math import sqrt, ceil, fabs
 
 import pcbnew
 
+from .my_debug import debug, enable_debug
+
 from typing import List, Tuple, Optional
 from .track_router import TrackRouter
 from .trace_segment_factory import TraceSegment, TraceSegmentFactory, ArcSegment
 from .pad_defs import RectangularPad, CircularPad
 from .vector_utils import scale_vec, shrink_vec, add_vec, sub_vec, distance, perp_vec, normalize_vec
+from .board_analyzer import BoardAnalyzer
+from .board_builder import BoardBuilder
+from .my_debug import debug, enable_debug
+
+KICAD_MICRONS = 1e-3
+
+enable_debug()
 
 class AlTrackRouter(TrackRouter):
     """
@@ -25,28 +34,98 @@ class AlTrackRouter(TrackRouter):
 
     def __init__(self, factory: TraceSegmentFactory):
         super().__init__(factory)
-        #self.width = 1000
+        # Some sane defaults
         self.width = 1000
         self.spacing = 200
-        self.top = 40000
-        self.bottom = 140000
-        self.left = 100000
-        self.right = 200000
         self.margin = 500
-        self.pitch = self.width + self.spacing
-        self.fuse = (RectangularPad(150000,79500,5000,6000,250), RectangularPad(150000,100500,5000,6000,250))
-        self.connections = (RectangularPad(143000,43500,4000,6000,300), RectangularPad(157000,43500,4000,6000,300))
-        self.holes = (CircularPad(104000,44000,4500,500), CircularPad(196000,44000,4500,500), CircularPad(104000,136000,4500,500), CircularPad(196000,136000,4500,500))
+
+        # Don't set board extents until we've analyzed the board
+        self.top = 0
+        self.bottom = 0
+        self.left = 0
+        self.right = 0
+
+        #self.fuse = (RectangularPad(150000,79500,5000,6000,250), RectangularPad(150000,100500,5000,6000,250))
+        self.fuse = None
+        #self.connections = (RectangularPad(143000,43500,4000,6000,300), RectangularPad(157000,43500,4000,6000,300))
+        self.connections = None
+        #self.holes = (CircularPad(104000,44000,4500,500), CircularPad(196000,44000,4500,500), CircularPad(104000,136000,4500,500), CircularPad(196000,136000,4500,500))
+        self.holes = None
         self.parent = None
 
+    def _update_derived_parameters(self):
+        self.pitch = self.width + self.spacing
         self.ystart = self.top + self.margin + self.pitch + self.width + self.spacing/2
         self.yend = self.bottom - self.margin - self.pitch
 
-    def update_board(self, board: pcbnew.BOARD):
+    def analyze_board(self, analyzer: BoardAnalyzer):
+        """
+        Analyze the board and set up the router's parameters.
+        """
+        left, top, right, bottom = analyzer.get_extents(1)
+
+        centre = ((left + right) / 2, (top + bottom) / 2)
+
+        debug(f"Extents: {left}, {top}, {right}, {bottom}, Centre: {centre}")
+
+        self.left = left * KICAD_MICRONS
+        self.top = top * KICAD_MICRONS
+        self.right = right * KICAD_MICRONS
+        self.bottom = bottom * KICAD_MICRONS
+
+        FIND_OFFSET = 10000000 # 10mm in nm
+        # Fuse pads are expected to be near the centre of the board aligned vertically
+        self.fuse = (
+            analyzer.get_closest_pad((centre[0], centre[1] - FIND_OFFSET), "F.Cu", KICAD_MICRONS),
+            analyzer.get_closest_pad((centre[0], centre[1] + FIND_OFFSET), "F.Cu", KICAD_MICRONS)
+        )
+        debug(f"Fuse: {self.fuse[0]}, {self.fuse[0].footprint.GetOrientationDegrees()}, {self.fuse[1]}, {self.fuse[1].footprint.GetOrientationDegrees()}");
+        
+        # Power connections are expected to be either side of the centre of the top edge of the board
+        self.connections = (
+            analyzer.get_closest_pad((centre[0] - FIND_OFFSET, top), "F.Cu", KICAD_MICRONS),
+            analyzer.get_closest_pad((centre[0] + FIND_OFFSET, top), "F.Cu", KICAD_MICRONS)
+        )
+        debug(f"Connections: {self.connections[0]}, {self.connections[0].footprint.GetOrientationDegrees()}, {self.connections[1]}, {self.connections[1].footprint.GetOrientationDegrees()}");
+
+        # Mounting holes are expected to be in the four corners of the board
+        self.holes = (
+            analyzer.get_closest_hole((left, top), KICAD_MICRONS),
+            analyzer.get_closest_hole((right, top), KICAD_MICRONS),
+            analyzer.get_closest_hole((left, bottom), KICAD_MICRONS),
+            analyzer.get_closest_hole((right, bottom), KICAD_MICRONS)
+        )
+
+        self._update_derived_parameters()
+
+    def update_board(self, builder: BoardBuilder) -> List[TraceSegment]:
         """
         Update the board with the generated tracks.
         """
-        pass
+        builder.clear_tracks()
+        tracks = self.generate_tracks()
+
+        builder.add_tracks(tracks)
+
+        # Move the fuse footprint off-centre to sit in between tracks
+        fp = self.fuse[0].footprint
+        position = fp.GetPosition()
+        position.x = int((self.fuse_right + self.fuse_left) * 500) # Average and convert to nm
+        fp.SetPosition(position)
+
+        # Move the power connections to sit in between tracks
+        fp = self.connections[0].footprint
+        position = pcbnew.VECTOR2I_MM(self.left_pad[0]*1e-3, self.left_pad[1]*1e-3)
+        fp.SetPosition(position)
+        debug(f"left_pad: {self.left_pad}, position: {position}")
+        fp = self.connections[1].footprint
+        position = pcbnew.VECTOR2I_MM(self.right_pad[0]*1e-3, self.right_pad[1]*1e-3)
+        fp.SetPosition(position)
+        debug(f"right_pad: {self.right_pad}, position: {position}")
+
+        pcbnew.Refresh()
+
+        return tracks
 
     def _info_msg(self, msg):
         wx.MessageBox(msg, "Emmett", wx.OK | wx.ICON_INFORMATION, self.parent)
@@ -76,14 +155,12 @@ class AlTrackRouter(TrackRouter):
         end = add_vec(result[-1].end_point, (-pitch, 0))
         result.append(self.factory.create_arc_segment(result[-1].end_point, mid, end, width))
 
-        elbow = self.fuse[0].y - self.fuse_right + self.fuse[0].x
-        delta = elbow / 1e6 - result[0].start_point[1]
-
         # TraceSegments are in metres. We are in microns
-        result[0].move_start((0, delta))
         fuse_centre = shrink_vec((self.fuse[0].x, self.fuse[0].y), 1e6)
+        elbow = shrink_vec((self.fuse[0].right() - self.width/2, self.fuse[0].y), 1e6)
 
-        result.append(self.factory.create_linear_segment(result[0].start_point, fuse_centre, width))
+        result.append(self.factory.create_linear_segment(result[0].start_point, elbow, width))
+        result.append(self.factory.create_linear_segment(elbow, fuse_centre, width))
 
         return result
 
@@ -112,14 +189,12 @@ class AlTrackRouter(TrackRouter):
         end = add_vec(result[-1].end_point, (pitch, 0))
         result.append(self.factory.create_arc_segment(result[-1].end_point, mid, end, width))
 
-        elbow = self.fuse[1].y + self.fuse[1].x - self.fuse_left
-        delta = elbow / 1e6 - result[0].start_point[1]
-
         # TraceSegments are in metres. We are in microns
-        result[0].move_start((0, delta))
         fuse_centre = shrink_vec((self.fuse[1].x, self.fuse[1].y), 1e6)
+        elbow = shrink_vec((self.fuse[1].left() + self.width/2, self.fuse[1].y), 1e6)
 
-        result.append(self.factory.create_linear_segment(result[0].start_point, fuse_centre, width))
+        result.append(self.factory.create_linear_segment(result[0].start_point, elbow, width))
+        result.append(self.factory.create_linear_segment(elbow, fuse_centre, width))
 
         return result
 
@@ -156,6 +231,8 @@ class AlTrackRouter(TrackRouter):
             self.shorten_track_pair(result, n, offset)
 
         pad = pad * 1e6 / count
+        self.left_pad = (pad, self.top + self.margin + self.connections[0].height/2)
+        debug(f"left_pad: {self.left_pad}, top: {self.top}, margin: {self.margin}, height: {self.connections[0].height}")
 
         result[0].move_start((0, -pitch))
 
@@ -165,7 +242,7 @@ class AlTrackRouter(TrackRouter):
         count = self.even_tracks_under(width, self.pitch)
         ystart = centre - (count-1)*self.pitch/2
 
-        self._info_msg(f"fuse_left: {self.fuse_left}, fuse_right: {self.fuse_right}, ystart: {ystart}, width: {width}, centre: {centre}, count: {count}")
+        debug(f"fuse_left: {self.fuse_left}, fuse_right: {self.fuse_right}, ystart: {ystart}, width: {width}, centre: {centre}, count: {count}")
         tracks = self.serpentine_track(
             (self.fuse_left - self.pitch/2, ystart),
             (self.fuse_right - self.pitch/2, ystart),
@@ -192,7 +269,6 @@ class AlTrackRouter(TrackRouter):
         x = hole.x + dx
         line = normalize_vec((-dx, dy), 1.5*self.pitch)
         start = (x, y);
-        self.left_pad = (pad, y + self.connections[0].height/2)
         elbow = (pad, y)
         tracks.append(self.factory.create_linear_segment(scale_vec(start, 1e-6), scale_vec(elbow, 1e-6), self.width * 1e-6))
         tracks.append(self.factory.create_linear_segment(scale_vec(elbow, 1e-6), scale_vec(self.left_pad, 1e-6), self.width * 1e-6))
@@ -259,6 +335,7 @@ class AlTrackRouter(TrackRouter):
             self.shorten_track_pair(result, n, offset)
 
         pad = pad * 1e6 / count
+        self.right_pad = (pad, self.top + self.margin + self.connections[1].height/2)
 
         hole = self.holes[1]
 
@@ -272,7 +349,6 @@ class AlTrackRouter(TrackRouter):
         x = hole.x - dx
         line = normalize_vec((dx, dy), 1.5*self.pitch)
         start = (x, y);
-        self.right_pad = (pad, y + self.connections[1].height/2)
         elbow = (pad, y)
         tracks = [
             self.factory.create_linear_segment(scale_vec(start, 1e-6), scale_vec(elbow, 1e-6), self.width * 1e-6),

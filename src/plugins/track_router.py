@@ -11,9 +11,11 @@ import pcbnew
 
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Optional
-from .trace_segment_factory import TraceSegmentFactory, TraceSegment
 from math import sqrt
 
+from .board_analyzer import BoardAnalyzer
+from .board_builder import BoardBuilder
+from .trace_segment_factory import TraceSegmentFactory, TraceSegment
 from .vector_utils import add_vec, sub_vec, scale_vec, shrink_vec, normalize_vec, perp_vec, invert_vec, x_mirror_vec, y_mirror_vec
 
 MICRONS_TO_M = 1e-6
@@ -58,6 +60,13 @@ class TrackRouter(ABC):
         self.log = ""
     
     @abstractmethod
+    def analyze_board(self, analyzer: BoardAnalyzer):
+        """
+        Analyze the board and set up the router's parameters.
+        """
+        pass
+
+    @abstractmethod
     def generate_tracks(self) -> List[TraceSegment]:
         """
         Generate tracks as per this router's algorithm and parameters.
@@ -72,7 +81,7 @@ class TrackRouter(ABC):
         pass
     
     @abstractmethod
-    def update_board(self, board: pcbnew.BOARD):
+    def update_board(self, builder: BoardBuilder) -> List[TraceSegment]:
         """
         Update the board with the generated tracks.
         """

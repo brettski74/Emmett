@@ -46,32 +46,8 @@ class EmmettDialog ( wx.Dialog ):
 
         fgSizer1.Add( self.m_staticText25, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT|wx.ALL, 5 )
 
-        self.minimumSpacing = wx.TextCtrl( sbSizer6.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER|wx.TE_PROCESS_ENTER, wx.DefaultValidator, u"trackSpacing" )
+        self.minimumSpacing = wx.TextCtrl( sbSizer6.GetStaticBox(), wx.ID_ANY, u"0.2", wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER|wx.TE_PROCESS_ENTER, wx.DefaultValidator, u"trackSpacing" )
         fgSizer1.Add( self.minimumSpacing, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_LEFT|wx.ALL, 5 )
-
-        self.m_staticText46 = wx.StaticText( sbSizer6.GetStaticBox(), wx.ID_ANY, u"Track Pitch:", wx.DefaultPosition, wx.DefaultSize, wx.ALIGN_RIGHT )
-        self.m_staticText46.Wrap( -1 )
-
-        fgSizer1.Add( self.m_staticText46, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT|wx.ALL, 5 )
-
-        self.trackPitch = wx.TextCtrl( sbSizer6.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER|wx.TE_PROCESS_ENTER, wx.DefaultValidator, u"trackPitch" )
-        fgSizer1.Add( self.trackPitch, 0, wx.ALL, 5 )
-
-        self.m_staticText47 = wx.StaticText( sbSizer6.GetStaticBox(), wx.ID_ANY, u"Pad Clearance:", wx.DefaultPosition, wx.DefaultSize, wx.ALIGN_RIGHT )
-        self.m_staticText47.Wrap( -1 )
-
-        fgSizer1.Add( self.m_staticText47, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT|wx.ALL, 5 )
-
-        self.padClearance = wx.TextCtrl( sbSizer6.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER|wx.TE_PROCESS_ENTER, wx.DefaultValidator, u"padClearance" )
-        fgSizer1.Add( self.padClearance, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_LEFT|wx.ALL, 5 )
-
-        self.m_staticText471 = wx.StaticText( sbSizer6.GetStaticBox(), wx.ID_ANY, u"Pad Diameter:", wx.DefaultPosition, wx.DefaultSize, wx.ALIGN_RIGHT )
-        self.m_staticText471.Wrap( -1 )
-
-        fgSizer1.Add( self.m_staticText471, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT|wx.ALL, 5 )
-
-        self.padDiameter = wx.TextCtrl( sbSizer6.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER|wx.TE_PROCESS_ENTER|wx.TE_READONLY, wx.DefaultValidator, u"trackSpacing" )
-        fgSizer1.Add( self.padDiameter, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_LEFT|wx.ALL, 5 )
 
         self.m_staticText35 = wx.StaticText( sbSizer6.GetStaticBox(), wx.ID_ANY, u"Calculated Spacing:", wx.DefaultPosition, wx.DefaultSize, 0 )
         self.m_staticText35.Wrap( -1 )
@@ -80,6 +56,14 @@ class EmmettDialog ( wx.Dialog ):
 
         self.calculatedSpacing = wx.TextCtrl( sbSizer6.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER|wx.TE_READONLY )
         fgSizer1.Add( self.calculatedSpacing, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_LEFT|wx.ALL, 5 )
+
+        self.m_staticText46 = wx.StaticText( sbSizer6.GetStaticBox(), wx.ID_ANY, u"Track Pitch:", wx.DefaultPosition, wx.DefaultSize, wx.ALIGN_RIGHT )
+        self.m_staticText46.Wrap( -1 )
+
+        fgSizer1.Add( self.m_staticText46, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT|wx.ALL, 5 )
+
+        self.trackPitch = wx.TextCtrl( sbSizer6.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER|wx.TE_PROCESS_ENTER, wx.DefaultValidator, u"trackPitch" )
+        fgSizer1.Add( self.trackPitch, 0, wx.ALL, 5 )
 
 
         sbSizer6.Add( fgSizer1, 1, wx.EXPAND, 5 )
@@ -109,7 +93,7 @@ class EmmettDialog ( wx.Dialog ):
         self.heaterPower = wx.TextCtrl( sbSizer12.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER )
         fgSizer8.Add( self.heaterPower, 0, wx.ALL, 5 )
 
-        self.m_staticText21 = wx.StaticText( sbSizer12.GetStaticBox(), wx.ID_ANY, u"Target Resistance (mΩ):", wx.DefaultPosition, wx.DefaultSize, wx.ALIGN_RIGHT )
+        self.m_staticText21 = wx.StaticText( sbSizer12.GetStaticBox(), wx.ID_ANY, u"Target Resistance (Ω):", wx.DefaultPosition, wx.DefaultSize, wx.ALIGN_RIGHT )
         self.m_staticText21.Wrap( -1 )
 
         fgSizer8.Add( self.m_staticText21, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT|wx.ALL, 5 )
@@ -163,7 +147,7 @@ class EmmettDialog ( wx.Dialog ):
 
         fgSizer9.Add( self.m_staticText32, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT|wx.ALL, 5 )
 
-        self.thermalResistance = wx.TextCtrl( sbSizer11.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER )
+        self.thermalResistance = wx.TextCtrl( sbSizer11.GetStaticBox(), wx.ID_ANY, u"2.8", wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER )
         fgSizer9.Add( self.thermalResistance, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_LEFT|wx.ALL, 5 )
 
         self.m_staticText33 = wx.StaticText( sbSizer11.GetStaticBox(), wx.ID_ANY, u"Power Margin (%):", wx.DefaultPosition, wx.DefaultSize, wx.ALIGN_RIGHT )
@@ -171,7 +155,7 @@ class EmmettDialog ( wx.Dialog ):
 
         fgSizer9.Add( self.m_staticText33, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT|wx.ALL, 5 )
 
-        self.powerMargin = wx.TextCtrl( sbSizer11.GetStaticBox(), wx.ID_ANY, u"20", wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER )
+        self.powerMargin = wx.TextCtrl( sbSizer11.GetStaticBox(), wx.ID_ANY, u"100", wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER )
         self.powerMargin.SetToolTip( u"Typically in the range of 20-50%." )
 
         fgSizer9.Add( self.powerMargin, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_LEFT|wx.ALL, 5 )
@@ -513,6 +497,9 @@ class EmmettDialog ( wx.Dialog ):
         self.Centre( wx.BOTH )
 
         # Connect Events
+        self.trackWidth.Bind( wx.EVT_KILL_FOCUS, self.HandleWidthLeave )
+        self.trackWidth.Bind( wx.EVT_TEXT, self.HandleWidthChange )
+        self.trackWidth.Bind( wx.EVT_TEXT_ENTER, self.HandleWidthEnter )
         self.enableDebug.Bind( wx.EVT_CHECKBOX, self.HandleDebugEnabled )
         self.loadButton.Bind( wx.EVT_BUTTON, self.HandleLoadClick )
         self.saveButton.Bind( wx.EVT_BUTTON, self.HandleSaveClick )
@@ -527,6 +514,15 @@ class EmmettDialog ( wx.Dialog ):
 
 
     # Virtual event handlers, override them in your derived class
+    def HandleWidthLeave( self, event ):
+        event.Skip()
+
+    def HandleWidthChange( self, event ):
+        event.Skip()
+
+    def HandleWidthEnter( self, event ):
+        event.Skip()
+
     def HandleDebugEnabled( self, event ):
         event.Skip()
 

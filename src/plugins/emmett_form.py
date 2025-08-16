@@ -12,6 +12,15 @@ class EmmettForm(EmmettDialog):
         self.builder = builder
         self.analyzer = analyzer
 
+    def HandleWidthChange(self, event):
+        self.minimumSpacing.ChangeValue(self.trackWidth.GetValue())
+
+    def HandleWidthEnter(self, event):
+        self.calculatedSpacing.ChangeValue(self.trackWidth.GetValue())
+
+    def HandleWidthFocus(self, event):
+        self.trackPitch.ChangeValue(self.trackWidth.GetValue())
+
     def HandleClearClick(self, event):
         self.builder.clear_tracks()
 

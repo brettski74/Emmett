@@ -3,11 +3,22 @@ BoardAnalyzer class for extracting trace information from KiCad PCB layouts.
 
 This class acts as an intermediary between KiCad's PCB data structures
 and our trace segment model, allowing analysis of loaded PCB layouts.
+
+Measurements are returned in metres.
 """
 
+from math import fabs
+import wx
 import pcbnew
 from typing import List, Tuple, Optional, Union
 from .trace_segment_factory import TraceSegmentFactory, TraceSegment, LinearSegment, ArcSegment
+from .pad_defs import RectangularPad, CircularPad
+from .vector_utils import distance
+from .my_debug import debug, stringify, enable_debug
+
+enable_debug()
+KICAD_UNITS = 1e-9
+KICAD_MM = 1e-6
 
 class BoardAnalyzer:
     """
@@ -25,43 +36,114 @@ class BoardAnalyzer:
             board: KiCad board object to analyze
         """
         self.board = board
+        self.parent = None
+
+    def _info_msg(self, msg):
+        wx.MessageBox(msg, "Emmett", wx.OK | wx.ICON_INFORMATION, self.parent)
+
+    def _error_msg(self, msg):
+        wx.MessageBox(msg, "Emmett Error", wx.OK | wx.ICON_ERROR, self.parent)
     
-    def get_extents(self) -> Tuple[float, float, float, float]:
+    def get_extents(self, units: float = KICAD_UNITS) -> Tuple[float, float, float, float]:
         """
         Get the extents of the board.
         """
         box = self.board.GetBoardEdgesBoundingBox()
 
         return (
-            box.GetLeft() / self.KICAD_UNITS,
-            box.GetTop() / self.KICAD_UNITS,
-            box.GetRight() / self.KICAD_UNITS,
-            box.GetBottom() / self.KICAD_UNITS
+            box.GetLeft() * units,
+            box.GetTop() * units,
+            box.GetRight() * units,
+            box.GetBottom() * units
         )
     
-    def get_closest_pad(self, point: Tuple[float, float], layer: str) -> RectangularPad:
+    def get_closest_pad(self, point: Tuple[float, float], layer: str, units: float = KICAD_UNITS) -> RectangularPad:
         """
         Get the closest pad to a point.
         """
-        pads = self.board.GetPads()
+        layer_id = self.board.GetLayerID(layer)
+        footprints = self.board.GetFootprints()
         closest = None
+        footprint = None
         closest_distance = float('inf')
 
-        for pad in pads:
-            if pad.GetLayerSet().Contains(layer_id):
-                distance = distance(point, (pad.GetPosition().x, pad.GetPosition().y))
-                if distance < closest_distance:
-                    closest = pad
-                    closest_distance = distance
+        for fp in footprints:
+            pads = fp.Pads()
+            #debug(f"Found {len(pads)} pads on {stringify(fp)}")
+            for pad in pads:
+                #debug(f"Pad {pad.GetPosition().x*KICAD_MM:.3f}, {pad.GetPosition().y*KICAD_MM:.3f}")
+                if pad.GetLayerSet().Contains(layer_id):
+                    d = distance(point, (pad.GetPosition().x, pad.GetPosition().y))
+                    #debug(f"Distance: {d}, Closest: {closest_distance}, {stringify(closest)}")
+                    if d < closest_distance:
+                        closest = pad
+                        footprint = fp
+                        closest_distance = d
 
         if closest is None:
-            raise Exception(f"No pad found on layer {layer} near {point}")
+            debug(f"No pad found on layer {layer} near ({point[0]*KICAD_MM:.3f}, {point[1]*KICAD_MM:.3f}). closest: {stringify(closest)}, closest_distance: {closest_distance}")
+            raise Exception(f"No pad found on layer {layer} near ({point[0]*KICAD_MM:.3f}, {point[1]*KICAD_MM:.3f})")
 
         # Return a RectangularPad object representing the location of the pad and it's size
         # and courtyard size
+        # TODO: Hack for now is to assume 0.250mm clearance until I can figure out how to read
+        # the courtyard details from the footprint.
+        
+        if 45 <= fabs(footprint.GetOrientationDegrees()) <= 135:
+            width = closest.GetSizeY()
+            height = closest.GetSizeX()
+            debug(f"Pad is rotated, width: {width}, height: {height}, orientation: {footprint.GetOrientationDegrees()}")
+        else:
+            width = closest.GetSizeX()
+            height = closest.GetSizeY()
+            debug(f"Pad is not rotated, width: {width}, height: {height}, orientation: {footprint.GetOrientationDegrees()}")
 
-        return closest
+        result = RectangularPad(
+            closest.GetPosition().x * units,
+            closest.GetPosition().y * units,
+            width * units,
+            height * units,
+            2.5e5 * units # 0.250mm in nm
+        )
+        result.footprint = footprint
+
+        return result
     
+    def get_closest_hole(self, point: Tuple[float, float], units: float = KICAD_UNITS) -> CircularPad:
+        """
+        Get the closest hole to a point.
+        """
+        f_cu = self.board.GetLayerID("F.Cu")
+        footprints = self.board.GetFootprints()
+        closest = None
+        closest_distance = float('inf')
+
+        for fp in footprints:
+            #debug(f"Footprint: {stringify(fp)}, Through-hole: {fp.HasThroughHolePads()}, On copper: {fp.IsOnLayer(f_cu)}")
+            if fp.HasThroughHolePads() and not fp.IsOnLayer(f_cu):
+                d = distance(point, (fp.GetPosition().x, fp.GetPosition().y))
+                #debug(f"Footprint: {stringify(fp)}, Distance: {d}, Closest: {closest_distance}, {stringify(closest)}")
+                if d < closest_distance:
+                    closest = fp
+                    closest_distance = d
+            
+        if closest is None:
+            debug(f"No hole found near ({point[0]*KICAD_MM:.3f}, {point[1]*KICAD_MM:.3f}), closest: {stringify(closest)}, closest_distance: {closest_distance}")
+            raise Exception(f"No hole found near ({point[0]*KICAD_MM:.3f}, {point[1]*KICAD_MM:.3f})")
+          
+        # Return a CircularPad object representing the location of the hole and it's size
+        # and courtyard size
+        # TODO: Hack for now is to assume 3.2mm hole and a 10mm courtyard diameter
+        result = CircularPad(
+            closest.GetPosition().x * units,
+            closest.GetPosition().y * units,
+            1.6e6 * units, # 3.2mm diameter in nm radius
+            3.4e6 * units # 6.8mm diameter in nm radius to make up the 10mm clearance
+        )
+
+        result.footprint = closest
+        return result
+
     def extract_trace_segments(self, factory: TraceSegmentFactory, 
                               layer_name: Optional[str] = None,
                               net_filter: Optional[Union[str, int]] = None) -> List[TraceSegment]:

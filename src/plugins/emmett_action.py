@@ -8,6 +8,7 @@ from .board_builder import BoardBuilder
 from .board_analyzer import BoardAnalyzer
 from .emmett_form import EmmettForm
 from .al_track_router import AlTrackRouter
+from .my_debug import debug, enable_debug
 
 class EmmettAction( pcbnew.ActionPlugin ):
  
@@ -22,11 +23,14 @@ class EmmettAction( pcbnew.ActionPlugin ):
     def Run(self):
         try:
             board = pcbnew.GetBoard()
+            enable_debug(True)
             if not board:
                 self._info_msg("No PCB board is currently loaded.")
                 return
 
             # Create and show the dialog
+            enable_debug(True)
+            debug("Running Emmett")
             builder = BoardBuilder(board)
             analyzer = BoardAnalyzer(board)
             dialog = EmmettForm(self._find_parent_window(), board, builder, analyzer)
@@ -80,9 +84,8 @@ class EmmettAction( pcbnew.ActionPlugin ):
             analyzer = dialog.analyzer
             router = AlTrackRouter(factory)
             router.parent = self.parent_window
-            tracks = router.generate_tracks()
-            #self._info_msg(router.log)
-            builder.add_tracks(tracks)
+            router.analyze_board(analyzer)
+            tracks = router.update_board(builder)
 
             # Calculate total resistance
             total_resistance = factory.calculate_total_resistance(tracks)

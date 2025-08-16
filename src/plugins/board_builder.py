@@ -70,6 +70,7 @@ class BoardBuilder:
         
         # Refresh the board
         self.board.BuildConnectivity()
+        pcbnew.Refresh()
         
         return len(tracks_to_remove)
     
@@ -106,6 +107,7 @@ class BoardBuilder:
                 
         # Refresh the board
         self.board.BuildConnectivity()
+        pcbnew.Refresh()
         
         return tracks_added
     
