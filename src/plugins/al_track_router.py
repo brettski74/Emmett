@@ -308,26 +308,32 @@ class AlTrackRouter(TrackRouter):
         result[0].move_start((0, -pitch))
 
         # Insert serpentine tracks in between fuse terminals
-        width = self.fuse[1].clear_top() - self.fuse[0].clear_bottom()
-        centre = (self.fuse[1].clear_top() + self.fuse[0].clear_bottom()) / 2
-        count = self.even_tracks_under(width, self.pitch)
-        ystart = centre - (count-1)*self.pitch/2
-
-        debug(f"fuse_left: {self.fuse_left}, fuse_right: {self.fuse_right}, ystart: {ystart}, width: {width}, centre: {centre}, count: {count}")
+        spacing_adjust = self.pitch/(self.fuse_count-1)
+        xfstart = self.fuse_right
+        yfstart = self.fuse[0].clear_bottom() + self.width/2 + 1.5*self.pitch + spacing_adjust/2
+        yfend = self.fuse[1].clear_top() - self.pitch + self.spacing/2 - spacing_adjust/2
+        
         tracks = self.serpentine_track(
-            (self.fuse_left - self.pitch/2, ystart),
-            (self.fuse_right - self.pitch/2, ystart),
+            (xfstart, yfstart),
+            (xfstart, yfend),
             self.width,
-            self.spacing,
-            count,
+            self.spacing + spacing_adjust,
+            self.fuse_count,
             self.factory,
             -1
         )
 
-        tracks.append(self.corner_90(add_vec(tracks[-1].end_point, (-pitch/2, pitch/2)), tracks[-1].end_point))
-        tracks.append(self.factory.create_linear_segment(tracks[-1].start_point, result[0].end_point, self.width / 1e6))
-        tracks.append(self.corner_90(tracks[0].start_point, add_vec(tracks[0].start_point, (-pitch/2, -pitch/2))))
-        result[0].end_point = tracks[-1].end_point
+        #tracks.append(self.corner_90(add_vec(tracks[-1].end_point, (-pitch/2, pitch/2)), tracks[-1].end_point))
+        debug(f"fuse_left: {self.fuse_left}, xfstart: {xfstart}, fuse_right: {self.fuse_right}, yfstart: {yfstart}, yfend: {yfend}, pitch: {self.pitch}, tracks[0]: {tracks[0]}, result[0]: {result[0]}")
+        tracks.append(self.factory.create_linear_segment(
+            scale_vec(((self.fuse_left - self.pitch/2), (self.fuse[0].clear_bottom() + self.width/2)), 1e-6),
+            scale_vec(((self.fuse_right - 1.5*self.pitch - spacing_adjust/2), (self.fuse[0].clear_bottom() + self.width/2)), 1e-6),
+            self.width / 1e6
+        ))
+        tracks.append(self.corner_90(tracks[-1].end_point, tracks[0].start_point))
+        tracks[-3].end_point = result[0].end_point
+        result[0].end_point = (result[0].end_point[0], tracks[-2].start_point[1] - self.pitch*5e-7)
+        tracks.append(self.corner_90(tracks[-2].start_point, result[0].end_point))
 
         hole = self.holes[0]
 
@@ -528,10 +534,13 @@ class AlTrackRouter(TrackRouter):
                 ddy = y/1e6 - t.start_point[1]
                 self.shorten_track_pair(tracks, i, fabs(ddy));
 
-    def corner_90(self, start: Tuple[float, float], end: Tuple[float, float]) -> TraceSegment:
+    def corner_90(self, start: Tuple[float, float], end: Tuple[float, float], scale: float = 1.0) -> TraceSegment:
         """
         Create a 90 degree corner arc.
         """
+        start = scale_vec(start, scale)
+        end = scale_vec(end, scale)
+
         deltax = end[0] - start[0]
         deltay = end[1] - start[1]
         quadrant = deltax * deltay
