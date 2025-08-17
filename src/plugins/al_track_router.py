@@ -11,9 +11,9 @@ import pcbnew
 
 from .my_debug import debug, enable_debug
 
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
 from .track_router import TrackRouter
-from .trace_segment_factory import TraceSegment, TraceSegmentFactory, ArcSegment
+from .trace_segment_factory import TraceSegment, TraceSegmentFactory, ArcSegment, LinearSegment
 from .pad_defs import RectangularPad, CircularPad
 from .vector_utils import scale_vec, shrink_vec, add_vec, sub_vec, distance, perp_vec, normalize_vec
 from .board_analyzer import BoardAnalyzer
@@ -58,6 +58,67 @@ class AlTrackRouter(TrackRouter):
         self.ystart = self.top + self.margin + self.pitch + self.width + self.spacing/2
         self.yend = self.bottom - self.margin - self.pitch
 
+    def derive_width(self, tracks: List[TraceSegment]) -> int:
+        """
+        Analyze the set of tracks on the board to derive the track width that was used.
+
+        The algorithm used looks at the widths of all tracks, both linear and arcs and uses the track width that is most common, rounded to the nearest micron.
+        """
+        widths = {}
+        mode = None
+        mode_count = 0
+
+        for track in tracks:
+            width = round(track.width * 1e6)
+            key = str(width)
+            widths[key] = (widths.get(key) or 0) + 1
+
+            if widths[key] > mode_count:
+                mode_count = widths[key]
+                mode = width
+        
+        return mode or 1000
+
+    def derive_spacing(self, tracks: List[TraceSegment]) -> int:
+        """
+        Analyze the set of tracks on the board to derive the track spacing that was used.
+
+        The algorithm used looks at all pairs of horizontal and vertical linear tracks and uses the spacing that is most common, rounded to the nearest micron.
+        """
+        def tgap(t1, t2, i):
+            return round((fabs(t1.start_point[i] - t2.start_point[i]) - (t1.width + t2.width)/2) * 1e6)
+
+        gaps = {}
+        mode = None
+        mode_count = 0
+
+        htracks = [t for t in tracks if isinstance(t, LinearSegment) and fabs(t.end_point[1] - t.start_point[1]) < 1e-8]
+        vtracks = [t for t in tracks if isinstance(t, LinearSegment) and fabs(t.end_point[0] - t.start_point[0]) < 1e-8]
+
+        for i in range(len(htracks)):
+            first = htracks[i]
+            for j in range(i+1, len(htracks)):
+                second = htracks[j]
+                gap = tgap(first, second, 1)
+                key = str(gap)
+                gaps[key] = (gaps.get(key) or 0) + 1
+                if gaps[key] > mode_count:
+                    mode_count = gaps[key]
+                    mode = gap
+
+        for i in range(len(vtracks)):
+            first = vtracks[i]
+            for j in range(i+1, len(vtracks)):
+                second = vtracks[j]
+                gap = tgap(first, second, 0)
+                key = str(gap)
+                gaps[key] = (gaps.get(key) or 0) + 1
+                if gaps[key] > mode_count:
+                    mode_count = gaps[key]
+                    mode = gap
+
+        return mode or 200
+
     def analyze_board(self, analyzer: BoardAnalyzer):
         """
         Analyze the board and set up the router's parameters.
@@ -73,6 +134,11 @@ class AlTrackRouter(TrackRouter):
         self.right = right * KICAD_MICRONS
         self.bottom = bottom * KICAD_MICRONS
 
+        factory = TraceSegmentFactory()
+        tracks = analyzer.extract_trace_segments(factory)
+        self.width = self.derive_width(tracks)
+        self.spacing = self.derive_spacing(tracks)
+
         FIND_OFFSET = 10000000 # 10mm in nm
         # Fuse pads are expected to be near the centre of the board aligned vertically
         self.fuse = (
@@ -83,8 +149,8 @@ class AlTrackRouter(TrackRouter):
         
         # Power connections are expected to be either side of the centre of the top edge of the board
         self.connections = (
-            analyzer.get_closest_pad((centre[0] - FIND_OFFSET, top), "F.Cu", KICAD_MICRONS),
-            analyzer.get_closest_pad((centre[0] + FIND_OFFSET, top), "F.Cu", KICAD_MICRONS)
+            analyzer.get_closest_pad((left, top), "F.Cu", KICAD_MICRONS),
+            analyzer.get_closest_pad((right, top), "F.Cu", KICAD_MICRONS)
         )
         debug(f"Connections: {self.connections[0]}, {self.connections[0].footprint.GetOrientationDegrees()}, {self.connections[1]}, {self.connections[1].footprint.GetOrientationDegrees()}");
 
@@ -151,13 +217,16 @@ class AlTrackRouter(TrackRouter):
 
         pitch = self.pitch / 1e6
         width = self.width / 1e6
+        result[0].move_start((0, pitch/2))
         mid = add_vec(result[-1].end_point, (-pitch/2, -pitch/2))
         end = add_vec(result[-1].end_point, (-pitch, 0))
         result.append(self.factory.create_arc_segment(result[-1].end_point, mid, end, width))
 
         # TraceSegments are in metres. We are in microns
-        fuse_centre = shrink_vec((self.fuse[0].x, self.fuse[0].y), 1e6)
-        elbow = shrink_vec((self.fuse[0].right() - self.width/2, self.fuse[0].y), 1e6)
+        fc = (self.fuse_left + self.fuse_right)/2
+        fuse_centre = shrink_vec((fc, self.fuse[0].y), 1e6)
+
+        elbow = shrink_vec((fc + (self.fuse[0].width - self.width)/2, self.fuse[0].y), 1e6)
 
         result.append(self.factory.create_linear_segment(result[0].start_point, elbow, width))
         result.append(self.factory.create_linear_segment(elbow, fuse_centre, width))
@@ -185,13 +254,15 @@ class AlTrackRouter(TrackRouter):
 
         pitch = self.pitch / 1e6
         width = self.width / 1e6
+        result[0].move_start((0, -pitch/2))
         mid = add_vec(result[-1].end_point, (pitch/2, pitch/2))
         end = add_vec(result[-1].end_point, (pitch, 0))
         result.append(self.factory.create_arc_segment(result[-1].end_point, mid, end, width))
 
         # TraceSegments are in metres. We are in microns
-        fuse_centre = shrink_vec((self.fuse[1].x, self.fuse[1].y), 1e6)
-        elbow = shrink_vec((self.fuse[1].left() + self.width/2, self.fuse[1].y), 1e6)
+        fc = (self.fuse_left + self.fuse_right)/2
+        fuse_centre = shrink_vec((fc, self.fuse[1].y), 1e6)
+        elbow = shrink_vec((fc - (self.fuse[1].width - self.width)/2, self.fuse[1].y), 1e6)
 
         result.append(self.factory.create_linear_segment(result[0].start_point, elbow, width))
         result.append(self.factory.create_linear_segment(elbow, fuse_centre, width))
@@ -391,6 +462,8 @@ class AlTrackRouter(TrackRouter):
         Returns:
             List of TraceSegment objects forming heating element.
         """
+        self._update_derived_parameters()
+
         self.total_count = self.even_tracks_under(self.right - self.left - 2*self.margin + self.spacing, self.pitch)
         self.fuse_count = self.odd_tracks_over(self.fuse[0].clear_width(), self.pitch)
         self.left_count = ceil((self.total_count - self.fuse_count) / 2)
@@ -409,7 +482,7 @@ class AlTrackRouter(TrackRouter):
         self.fuse_left = self.fuse[0].x - (self.fuse_count-1)*self.pitch/2
         self.fuse_right = self.fuse[0].x + (self.fuse_count-1)*self.pitch/2
 
-        return self.generate_fuse_in_tracks() + self.generate_fuse_out_tracks() + self.generate_left_tracks() + self.generate_right_tracks()
+        return self.generate_left_tracks() + self.generate_right_tracks() + self.generate_fuse_in_tracks() + self.generate_fuse_out_tracks()
 
     def avoid_hole(self, tracks: List[TraceSegment], hole: CircularPad, clearance: Optional[float] = -1.0):
         """

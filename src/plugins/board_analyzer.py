@@ -14,7 +14,7 @@ from typing import List, Tuple, Optional, Union
 from .trace_segment_factory import TraceSegmentFactory, TraceSegment, LinearSegment, ArcSegment
 from .pad_defs import RectangularPad, CircularPad
 from .vector_utils import distance
-from .my_debug import debug, stringify, enable_debug
+from .my_debug import debug, stringify, enable_debug, stringify
 
 enable_debug()
 KICAD_UNITS = 1e-9
@@ -48,14 +48,37 @@ class BoardAnalyzer:
         """
         Get the extents of the board.
         """
-        box = self.board.GetBoardEdgesBoundingBox()
+        left = float('inf')
+        top = float('inf')
+        right = float('-inf')
+        bottom = float('-inf')
 
-        return (
-            box.GetLeft() * units,
-            box.GetTop() * units,
-            box.GetRight() * units,
-            box.GetBottom() * units
-        )
+        drawings = self.board.GetDrawings()
+        for d in drawings:
+            if isinstance(d, pcbnew.PCB_SHAPE):
+                if d.ShowShape() == "Line":
+                    if d.GetLayer() == pcbnew.Edge_Cuts:
+                        if d.GetStartX() < left:
+                            left = d.GetStartX()
+                        if d.GetEndX() < left:
+                            left = d.GetEndX()
+
+                        if d.GetStartY() < top:
+                            top = d.GetStartY()
+                        if d.GetEndY() < top:
+                            top = d.GetEndY()
+
+                        if d.GetStartX() > right:
+                            right = d.GetStartX()
+                        if d.GetEndX() > right:
+                            right = d.GetEndX()
+
+                        if d.GetStartY() > bottom:
+                            bottom = d.GetStartY()
+                        if d.GetEndY() > bottom:
+                            bottom = d.GetEndY()
+
+        return (left * units, top * units, right * units, bottom * units)
     
     def get_closest_pad(self, point: Tuple[float, float], layer: str, units: float = KICAD_UNITS) -> RectangularPad:
         """
@@ -204,15 +227,15 @@ class BoardAnalyzer:
             net_name = net_info.GetNetname() if net_info else None
             
             # Convert from KiCad units (nanometers) to meters
-            start_m = (start_point.x / self.KICAD_UNITS, start_point.y / self.KICAD_UNITS)
-            end_m = (end_point.x / self.KICAD_UNITS, end_point.y / self.KICAD_UNITS)
-            width_m = width / self.KICAD_UNITS
+            start_m = (start_point.x * KICAD_UNITS, start_point.y * KICAD_UNITS)
+            end_m = (end_point.x * KICAD_UNITS, end_point.y * KICAD_UNITS)
+            width_m = width * KICAD_UNITS
             
             # Check if this is an arc
             if isinstance(track, pcbnew.PCB_ARC):
                 # This is an arc - get the mid point directly from KiCad
                 mid_point = track.GetMid()
-                mid_m = (mid_point.x / self.KICAD_UNITS, mid_point.y / self.KICAD_UNITS)
+                mid_m = (mid_point.x * KICAD_UNITS, mid_point.y * KICAD_UNITS)
                 
                 arc_segment = factory.create_arc_segment(
                     start_point=start_m,

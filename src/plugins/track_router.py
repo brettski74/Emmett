@@ -21,7 +21,6 @@ from .vector_utils import add_vec, sub_vec, scale_vec, shrink_vec, normalize_vec
 MICRONS_TO_M = 1e-6
 MICRONS_TO_MM = 1e-3
 
-
 def mm(microns):
     if isinstance(microns, tuple):
         return (f"{(microns[0] * MICRONS_TO_MM):.3f}", f"{(microns[1] * MICRONS_TO_MM):.3f}")
@@ -86,6 +85,12 @@ class TrackRouter(ABC):
         Update the board with the generated tracks.
         """
         pass
+
+    def get_extents_mm(self) -> Tuple[float, float, float, float]:
+        """
+        Get the extents of the board in millimeters.
+        """
+        return (self.left * MICRONS_TO_MM, self.top * MICRONS_TO_MM, self.right * MICRONS_TO_MM, self.bottom * MICRONS_TO_MM)
     
     def even_tracks_over(self, distance: float, pitch: float) -> int:
         """

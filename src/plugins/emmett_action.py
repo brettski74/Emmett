@@ -28,27 +28,29 @@ class EmmettAction( pcbnew.ActionPlugin ):
                 self._info_msg("No PCB board is currently loaded.")
                 return
 
-            # Create and show the dialog
+            # Create and show the form
             enable_debug(True)
             debug("Running Emmett")
             builder = BoardBuilder(board)
             analyzer = BoardAnalyzer(board)
-            dialog = EmmettForm(self._find_parent_window(), board, builder, analyzer)
-            result = dialog.ShowModal()
-            dialog.Destroy()
+            factory = TraceSegmentFactory()
+            router = AlTrackRouter(factory)
+            form = EmmettForm(self._find_parent_window(), board, builder, analyzer, router)
+            result = form.ShowModal()
+            form.Destroy()
             
-            # Handle dialog result if needed
+            # Handle form result if needed
             if result == wx.ID_OK:
                 # User clicked Generate button
-                self._handle_generate_clicked(dialog, board)
+                self._handle_generate_clicked(form, board)
             elif result == wx.ID_APPLY:
                 # User clicked Apply button
-                self._handle_apply_clicked(dialog, board)
+                self._handle_apply_clicked(form, board)
             
             return
 
         except Exception as e:
-            self._error_msg(f"Error launching dialog: {e}")
+            self._error_msg(f"Error launching form: {e}")
     
     def _find_parent_window(self):
         if self.parent_window is None:
@@ -70,26 +72,18 @@ class EmmettAction( pcbnew.ActionPlugin ):
     def _error_msg(self, msg):
         wx.MessageBox(msg, "Emmett Error", wx.OK | wx.ICON_ERROR, self._find_parent_window())
 
-    def _handle_generate_clicked(self, dialog, board):
+    def _handle_generate_clicked(self, form, board):
         """Handle when user clicks Generate button."""
         try:
-            # Get the currently loaded board
-            board = pcbnew.GetBoard()
-            if not board:
-                self._info_msg("No PCB board is currently loaded.")
-                return
-            
-            factory = TraceSegmentFactory()
-            builder = dialog.builder
-            analyzer = dialog.analyzer
-            router = AlTrackRouter(factory)
+            debug(f"form.track_width_value: {form.track_width_value}, form.track_spacing_value: {form.track_spacing_value}")
+            builder = form.builder
+            router = form.router
+            factory = router.factory
             router.parent = self.parent_window
-            router.analyze_board(analyzer)
+            router.width = float(form.track_width_value) * 1e3
+            router.spacing = float(form.track_spacing_value) * 1e3
             tracks = router.update_board(builder)
 
-            # Calculate total resistance
-            total_resistance = factory.calculate_total_resistance(tracks)
-            
             # Calculate temperature-compensated resistances
             resistance_20c = factory.calculate_total_resistance(tracks, temperature_celsius=20)
             resistance_220c = factory.calculate_total_resistance(tracks, temperature_celsius=220)
@@ -118,7 +112,7 @@ class EmmettAction( pcbnew.ActionPlugin ):
             msg += f"\n{traceback.format_exc()}"
             self._error_msg(msg)
     
-    def _handle_apply_clicked(self, dialog, board):
+    def _handle_apply_clicked(self, form, board):
         """Handle when user clicks Apply button."""
         pass
 
