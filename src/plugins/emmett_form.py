@@ -1,12 +1,15 @@
 import os
 import traceback
 import wx
+from math import sqrt
+
 import pcbnew
+
 from .emmett_dialog import EmmettDialog
 from .board_builder import BoardBuilder
 from .board_analyzer import BoardAnalyzer
 from .trace_segment_factory import TraceSegmentFactory
-from .my_debug import debug,enable_debug
+from .my_debug import debug,enable_debug, stringify
 from .track_router import TrackRouter
 from .al_track_router import AlTrackRouter
 
@@ -22,10 +25,10 @@ def resource_dir() -> str:
     return result
 
 def fadd(a, b) -> str:
-    return fnormalize(float(a.GetValue() or 0) + float(b.GetValue() or 0))
+    return fnormalize(fget(a) + fget(b))
 
 def fsub(a, b) -> str:
-    return fnormalize(float(a.GetValue() or 0) - float(b.GetValue() or 0))
+    return fnormalize(fget(a) - fget(b))
 
 def fnormalize(value) -> str:
     return f"{value:.3f}".rstrip('0').rstrip('.')
@@ -40,6 +43,9 @@ def fset(field, value, events = False) -> str:
 
     return val
 
+def fget(field) -> float:
+    return float(field.GetValue() or 0)
+
 def fdefault(field, value, events = False) -> str:
     val = field.GetValue()
     if val == "":
@@ -47,7 +53,7 @@ def fdefault(field, value, events = False) -> str:
     return val
 
 def field_normalize(field) -> str:
-    value = float(field.GetValue() or 0)
+    value = fget(field)
     result = fnormalize(value)
     field.ChangeValue(result)
     return result
@@ -76,19 +82,154 @@ class EmmettForm(EmmettDialog):
     def click_clear_button(self, event):
         self.builder.clear_tracks()
 
+    def derive_thermal_electrical(self):
+        width = float(self.extent_width.GetValue())
+        height = float(self.extent_height.GetValue())
+        area = width * height
+
+        # This formula is a guess based on empirical data with 100x100mm hotplates and a conversation with GPT5.
+        # It's based on the thermal resistance to ambient of many of my FR4 hotplates being measured in the 2.7-2.9 K/W range
+        # And GPT5's comment that making the hotplate twice as big (ie. 4 times the area) will scale the thermal resistance
+        # down by a factor of about 1/3.36. I then extrapolated that into the power formula below.
+        # It may or may not work well. We would need more empirical data to be sure or maybe a Phd in physics of heat flow.
+        thermal_resistance = 2.8 * (10000/area) ** 0.874230616502018
+        fset(self.thermal_resistance, thermal_resistance)
+
+        # Determine power required to hold the hotplate at the maximum temperature.
+        hold_power = round((fget(self.maximum_temperature) - fget(self.ambient_temperature)) / thermal_resistance, 2)
+        
+        # If power is set, then use that and calculate the power margin, otherwise calcualte required power based on the power margin
+        if self.heater_power.GetValue() != "":
+            power = float(self.heater_power.GetValue())
+            margin = round((power / hold_power - 1) * 100, 2)
+            fset(self.power_margin, margin)
+        else:
+            # If there's no power margin, either, then default to 100%
+            margin = float(self.power_margin.GetValue() or 100)
+            power = hold_power * (1 + margin/100)
+            fset(self.heater_power, power)
+
+        # If we have been given the operating voltage, then calculate the target resistance
+        if self.heater_voltage.GetValue() != "":
+            voltage = float(self.heater_voltage.GetValue())
+            target_resistance = voltage * voltage / power
+            fset(self.target_resistance, target_resistance)
+        else:
+            if self.target_resistance.GetValue() == "" and self.hot_resistance.GetValue() != "":
+                self.target_resistance.ChangeValue(self.hot_resistance.GetValue())
+
+            # If we have been given the target resistance, then calculate the operating voltage
+            if self.target_resistance.GetValue() != "":
+                target_resistance = float(self.target_resistance.GetValue())
+                voltage = round(sqrt(target_resistance * power), 2)
+                fset(self.heater_voltage, voltage)
+
+    def click_resize_button(self, event):
+        # We will work in microns and round to the nearest micron before applying to the board.
+        # Get the centre point in microns
+        centre = (round((fget(self.extent_left) + fget(self.extent_right))*500), round((fget(self.extent_top) + fget(self.extent_bottom))*500))
+
+        # Get the current width and height in microns
+        width = round((fget(self.extent_right) - fget(self.extent_left)) * 1000)
+        height = round((fget(self.extent_bottom) - fget(self.extent_top)) * 1000)
+
+        # Get the new width and height
+        new_width = round(fget(self.extent_width) * 1000)
+        new_height = round(fget(self.extent_height) * 1000)
+
+        # Get the horizontal and vertical deltas - half-scale as we will apply equally on both sides to keep the same centre
+        deltah = (new_width - width) / 2
+        deltav = (new_height - height) / 2
+        dx = int(deltah * 1000)
+        dy = int(deltav * 1000)
+
+        hole = self.analyzer.get_closest_hole((fget(self.extent_left)*1e6, fget(self.extent_top)*1e6))
+        debug(f"hole: {stringify(hole.footprint)}, delta: ({deltah},{deltav}), dx,dy: ({-dx},{-dy})")
+        hole.footprint.Move(pcbnew.VECTOR2I(-dx, -dy))
+
+        hole = self.analyzer.get_closest_hole((fget(self.extent_right)*1e6, fget(self.extent_top)*1e6))
+        debug(f"hole: {stringify(hole.footprint)}, delta: ({deltah},{deltav}), dx,dy: ({dx},{-dy})")
+        hole.footprint.Move(pcbnew.VECTOR2I(dx, -dy))
+
+        hole = self.analyzer.get_closest_hole((fget(self.extent_left)*1e6, fget(self.extent_bottom)*1e6))
+        debug(f"hole: {stringify(hole.footprint)}, delta: ({deltah},{deltav}), dx,dy: ({-dx},{dy})")
+        hole.footprint.Move(pcbnew.VECTOR2I(-dx, dy))
+
+        hole = self.analyzer.get_closest_hole((fget(self.extent_right)*1e6, fget(self.extent_bottom)*1e6))
+        debug(f"hole: {stringify(hole.footprint)}, delta: ({deltah},{deltav}), dx,dy: ({dx},{dy})")
+        hole.footprint.Move(pcbnew.VECTOR2I(dx, dy))
+
+        drawings = self.board.GetDrawings()
+        for drawing in drawings:
+            if isinstance(drawing, pcbnew.PCB_SHAPE):
+                if drawing.GetLayer() == pcbnew.Edge_Cuts:
+                    if drawing.ShowShape() == "Line":
+                        startx = drawing.GetStartX()
+                        starty = drawing.GetStartY()
+                        endx = drawing.GetEndX()
+                        endy = drawing.GetEndY()
+
+                        if startx == endx:
+                            # Vertical line
+                            if starty > endy:
+                                starty, endy = endy, starty
+                            
+                            if startx > centre[0]*1000:
+                                newx = int(startx + deltah * 1000)
+                            else:
+                                newx = int(startx - deltah * 1000)
+                            debug(f"newx: {newx}, start: ({startx},{starty}), end: ({endx},{endy}), delta: ({deltah},{deltav}), centre: ({centre[0]},{centre[1]})")
+                            
+                            drawing.SetStart(pcbnew.VECTOR2I(newx, int(starty - deltav * 1000)))
+                            drawing.SetEnd(pcbnew.VECTOR2I(newx, int(endy + deltav * 1000)))
+                        elif starty == endy:
+                            #Horixontal line
+                            if startx > endx:
+                                startx, endx = endx, startx
+                            
+                            if starty > centre[1]*1000:
+                                newy = int(starty + deltav * 1000)
+                            else:
+                                newy = int(starty - deltav * 1000)
+                            debug(f"newy: {newy}, start: ({startx},{starty}), end: ({endx},{endy}), delta: ({deltah},{deltav}), centre: ({centre[0]},{centre[1]})")
+                            
+                            drawing.SetStart(pcbnew.VECTOR2I(int(startx - deltah * 1000), newy))
+                            drawing.SetEnd(pcbnew.VECTOR2I(int(endx + deltah * 1000), newy))
+                        else:
+                            raise ValueError("Only horizontal and vertical lines are supported during resize")
+
+                    elif drawing.ShowShape() == "Arc":
+                        arc_centre = drawing.GetCenter()
+                        if arc_centre[0] > centre[0]*1000:
+                            dx = deltah * 1000
+                        else:
+                            dx = -deltah * 1000
+                        
+                        if arc_centre[1] > centre[1]*1000:
+                            dy = deltav * 1000
+                        else:
+                            dy = -deltav * 1000
+
+                        drawing.Move(pcbnew.VECTOR2I(int(dx), int(dy)))
+
+        pcbnew.Refresh()
+        self.click_analyze_button(None)
+
     def click_analyze_button(self, event):
         try:
             self.router.analyze_board(self.analyzer)
 
             left, top, right, bottom = self.router.get_extents_mm()
 
-            fset(self.extent_left, left)
-            fset(self.extent_top, top)
-            fset(self.extent_right, right)
-            fset(self.extent_bottom, bottom)
+            self.extent_left_value = fset(self.extent_left, left)
+            self.extent_top_value = fset(self.extent_top, top)
+            self.extent_right_value = fset(self.extent_right, right)
+            self.extent_bottom_value = fset(self.extent_bottom, bottom)
+            self.extent_width_value = fset(self.extent_width, right - left)
+            self.extent_height_value = fset(self.extent_height, bottom - top)
 
             thickness = float(fdefault(self.track_thickness, 35)) * 1e-6
-            resistivity = float(fdefault(self.track_resistivity, 1.68)) * 1e-8
+            resistivity = 1.68e-8
 
             factory = TraceSegmentFactory()
             factory.thickness = thickness
@@ -108,6 +249,8 @@ class EmmettForm(EmmettDialog):
 
             fset(self.cold_resistance, factory.calculate_total_resistance(tracks, float(cold)))
             fset(self.hot_resistance, factory.calculate_total_resistance(tracks, float(hot)))
+
+            self.derive_thermal_electrical()
 
             self.m_main_notebook.ChangeSelection(1)
             self.m_calculationPanel.SetFocus()

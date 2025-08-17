@@ -143,6 +143,7 @@ class BoardAnalyzer:
 
         for fp in footprints:
             #debug(f"Footprint: {stringify(fp)}, Through-hole: {fp.HasThroughHolePads()}, On copper: {fp.IsOnLayer(f_cu)}")
+            debug(f"footprint: {fp.GetPosition()}, point: {point}")
             if fp.HasThroughHolePads() and not fp.IsOnLayer(f_cu):
                 d = distance(point, (fp.GetPosition().x, fp.GetPosition().y))
                 #debug(f"Footprint: {stringify(fp)}, Distance: {d}, Closest: {closest_distance}, {stringify(closest)}")
@@ -164,6 +165,7 @@ class BoardAnalyzer:
             3.4e6 * units # 6.8mm diameter in nm radius to make up the 10mm clearance
         )
 
+        debug(f"closest hole: {stringify(closest)}")
         result.footprint = closest
         return result
 
