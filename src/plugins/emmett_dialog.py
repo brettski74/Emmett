@@ -67,6 +67,17 @@ class EmmettDialog ( wx.Dialog ):
 
         fgElectricalSpecifications.Add( self.target_resistance, 0, wx.ALL, 5 )
 
+        self.m_ColdCurrent = wx.StaticText( sbElectricalSpecifications.GetStaticBox(), wx.ID_ANY, u"Cold Current (A):", wx.DefaultPosition, wx.DefaultSize, wx.ALIGN_RIGHT )
+        self.m_ColdCurrent.Wrap( -1 )
+
+        fgElectricalSpecifications.Add( self.m_ColdCurrent, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT|wx.ALL, 5 )
+
+        self.cold_current = wx.TextCtrl( sbElectricalSpecifications.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER|wx.TE_READONLY, wx.DefaultValidator, u"heater_voltage" )
+        self.cold_current.Enable( False )
+        self.cold_current.SetToolTip( u"The current required to reach the specified power level at ambient temperatures." )
+
+        fgElectricalSpecifications.Add( self.cold_current, 0, wx.ALL, 5 )
+
 
         sbElectricalSpecifications.Add( fgElectricalSpecifications, 1, wx.EXPAND, 5 )
 
@@ -344,17 +355,17 @@ class EmmettDialog ( wx.Dialog ):
         self.extent_height = wx.TextCtrl( sbBoardExtents.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER|wx.TE_PROCESS_ENTER, wx.DefaultValidator, u"extent_bottom" )
         fgBoardExtents.Add( self.extent_height, 0, wx.ALL, 5 )
 
-        self.m_ExtentSpacer1 = wx.StaticText( sbBoardExtents.GetStaticBox(), wx.ID_ANY, u" ", wx.DefaultPosition, wx.DefaultSize, wx.ALIGN_RIGHT )
+        self.m_ExtentSpacer1 = wx.StaticText( sbBoardExtents.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, wx.ALIGN_RIGHT )
         self.m_ExtentSpacer1.Wrap( -1 )
 
         fgBoardExtents.Add( self.m_ExtentSpacer1, 0, wx.ALL, 5 )
 
-        self.m_ExtentSpacer2 = wx.StaticText( sbBoardExtents.GetStaticBox(), wx.ID_ANY, u" ", wx.DefaultPosition, wx.DefaultSize, wx.ALIGN_RIGHT )
+        self.m_ExtentSpacer2 = wx.StaticText( sbBoardExtents.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, wx.ALIGN_RIGHT )
         self.m_ExtentSpacer2.Wrap( -1 )
 
         fgBoardExtents.Add( self.m_ExtentSpacer2, 0, wx.ALL, 5 )
 
-        self.m_ExtentSpacer3 = wx.StaticText( sbBoardExtents.GetStaticBox(), wx.ID_ANY, u" ", wx.DefaultPosition, wx.DefaultSize, wx.ALIGN_RIGHT )
+        self.m_ExtentSpacer3 = wx.StaticText( sbBoardExtents.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, wx.ALIGN_RIGHT )
         self.m_ExtentSpacer3.Wrap( -1 )
 
         fgBoardExtents.Add( self.m_ExtentSpacer3, 0, wx.ALL, 5 )
@@ -498,6 +509,9 @@ class EmmettDialog ( wx.Dialog ):
         self.target_resistance.Bind( wx.EVT_KILL_FOCUS, self.target_resistance_leave )
         self.target_resistance.Bind( wx.EVT_TEXT, self.target_resistance_change )
         self.target_resistance.Bind( wx.EVT_TEXT_ENTER, self.target_resistance_enter )
+        self.cold_current.Bind( wx.EVT_KILL_FOCUS, self.heater_voltage_leave )
+        self.cold_current.Bind( wx.EVT_TEXT, self.heater_voltage_change )
+        self.cold_current.Bind( wx.EVT_TEXT_ENTER, self.heater_voltage_enter )
         self.maximum_temperature.Bind( wx.EVT_KILL_FOCUS, self.maximum_temperature_leave )
         self.maximum_temperature.Bind( wx.EVT_TEXT, self.maximum_temperature_change )
         self.maximum_temperature.Bind( wx.EVT_TEXT_ENTER, self.maximum_temperature_enter )
@@ -565,6 +579,9 @@ class EmmettDialog ( wx.Dialog ):
 
     def target_resistance_enter( self, event ):
         event.Skip()
+
+
+
 
     def maximum_temperature_leave( self, event ):
         event.Skip()

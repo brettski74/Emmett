@@ -127,6 +127,11 @@ class EmmettForm(EmmettDialog):
                 fset(self.heater_voltage, voltage)
                 self.heater_voltage_value = self.heater_voltage.GetValue()
 
+        self.recalculate_cold_current()
+
+    def recalculate_cold_current(self):
+        fset(self.cold_current, sqrt(fget(self.heater_power) / fget(self.cold_resistance)))
+
     def click_resize_button(self, event):
         # We will work in microns and round to the nearest micron before applying to the board.
         # Get the centre point in microns
@@ -441,6 +446,7 @@ class EmmettForm(EmmettDialog):
             return
 
         self.heater_power_value = newValue
+        self.recalculate_cold_current()
 
         margin = self.calculate_power_margin(float(newValue))
         fset(self.power_margin, round(margin, 1))
@@ -509,6 +515,3 @@ class EmmettForm(EmmettDialog):
             msg = f"Error optimizing tracks: {e}"
             msg += f"\n{traceback.format_exc()}"
             wx.MessageBox(msg, "Emmett Error", wx.OK | wx.ICON_ERROR)
-
-
-
