@@ -32,7 +32,7 @@ You should now see Emmet show up among your installed plugins. When you open KiC
 
 ## Using Emmett
 
-Emmett is designed to work with purpose-designed PCB layouts for heating elements. The current version only supports a single layout algorithm for an aluminium hotplate design of mine. It includes a thermal fuse which you must create on the manufactured boards for them to work and has surface mount pads for power connection. The fuse link and power connections must be soldered in place using a higher temperature solder alloy. Despite the presence of the thermal fuse and the use of higher temperature solder alloys, there is a risk that your live power connections reflow and the cables become loose and may pose a risk of fire or equipment damage.
+Emmett is designed to work with purpose-designed PCB layouts for heating elements. The current version only supports a single layout algorithm for an aluminium hotplate design of mine. It includes a thermal fuse which you must create on the manufactured boards for them to work and has surface mount pads for power connection. The fuse link and power connections must be soldered in place using a higher temperature solder alloy. Despite the presence of the thermal fuse and the use of higher temperature solder alloys, there is a risk that your live power connections reflow and the cables become loose. This may pose a risk of fire or equipment damage.
 
 **It is important to ensure that your hotplate assembly includes precautions to limit the movement of the live cable ends should they become detached during a fault or other unintended modes of operation.**
 
@@ -41,7 +41,7 @@ You can find a hotplate layout that works with Emmett in the releases.
 Load the hotplate layout.
 Click the Emmett button on the toolbar to launch Emmett.
 
-![Emmett Main Technical Tab](doc/emmett-technical-tab.png)
+![Emmett Main Technical Tab](./doc/emmett-technical-tab.png)
 
 When you first open Emmett, he will analyze the currently open PCB layout to deduce some parameter values from it. On the *Technical* tab, you set most of the relevant design parameters for creating your hotplate.
 
