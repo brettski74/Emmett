@@ -17,6 +17,40 @@ from .vector_utils import add_vec, sub_vec, scale_vec, shrink_vec, normalize_vec
 
 KICAD_MM = 1e3
 KICAD_UNITS = 1e9
+COPPER_TCR = 0.00393          # Temperature coefficient of resistance per °C (copper)
+COPPER_RESISTIVITY = 1.68e-8  # Ohm-meters (copper at 20°C)
+COPPER_1OZ_THICKNESS = 35e-6      # meters (35 microns)
+
+def temperature_adjust_resistance(measured_resistance: float, measured_temperature: float, target_temperature: float, tcr: Optional[float] = COPPER_TCR) -> float:
+    """
+    Apply temperature coefficient of resistance adjustment.
+    
+    Args:
+        measured_resistance: Resistance at measured temperature
+        measured_temperature: Temperature in °C at which the resistance was measured
+        target_temperature: Temperature in °C at which the resistance is desired
+    
+    Returns:
+        Temperature-adjusted resistance
+    """
+    # TCR formula: R(T) = R(20°C) * [1 + α * (T - 20°C)]
+    # where α is the temperature coefficient of resistance
+    # The published TCR only works for a base temperature of 20 celsius
+    # If the measured temperature if not 20 celsius, we need to first back-calculate to determine the resistance at 20 celsius
+    # Once we have a resistance value at 20 celsius, we can then apply the TCR formula to determine the restistance at the taret temperature
+    
+    if measured_temperature == 20.0:
+        base_resistance = measured_resistance
+    else:
+        base_resistance = measured_resistance / (1 + tcr * (measured_temperature - 20.0))
+
+    if target_temperature == 20.0:
+        return base_resistance
+
+    adjusted_resistance = base_resistance * (1 + tcr * (target_temperature - 20.0))
+
+    return adjusted_resistance
+
 
 class TraceSegment(ABC):
     """
@@ -107,7 +141,7 @@ class TraceSegment(ABC):
         
         # Apply temperature coefficient of resistance if temperature provided
         if temperature_celsius is not None:
-            resistance = self._factory._apply_temperature_adjustment(resistance, temperature_celsius)
+            resistance = temperature_adjust_resistance(resistance, 20.0, temperature_celsius, self._factory.tcr)
         
         return resistance
 
@@ -377,7 +411,7 @@ class ArcSegment(TraceSegment):
         
         # Apply temperature coefficient of resistance if temperature provided
         if temperature_celsius is not None:
-            adjusted_resistance = self._factory._apply_temperature_adjustment(adjusted_resistance, temperature_celsius)
+            adjusted_resistance = temperature_adjust_resistance(adjusted_resistance, 20.0, temperature_celsius, self._factory.tcr)
         
         return adjusted_resistance
 
@@ -396,10 +430,7 @@ class TraceSegmentFactory:
     """
     
     # Default values
-    DEFAULT_COPPER_RESISTIVITY = 1.68e-8  # Ohm-meters (copper at 20°C)
-    DEFAULT_COPPER_THICKNESS = 35e-6      # meters (35 microns)
     DEFAULT_ARC_ADJUSTMENT_FACTOR = 1.1   # 10% increase for arc resistance
-    DEFAULT_COPPER_TCR = 0.00393          # Temperature coefficient of resistance per °C (copper)
     
     def __init__(self, resistivity: Optional[float] = None, 
                  thickness: Optional[float] = None,
@@ -416,10 +447,10 @@ class TraceSegmentFactory:
             tcr: Temperature coefficient of resistance per °C (defaults to copper)
             net: Default net name for trace segments created by this factory
         """
-        self._resistivity = resistivity or self.DEFAULT_COPPER_RESISTIVITY
-        self._thickness = thickness or self.DEFAULT_COPPER_THICKNESS
+        self._resistivity = resistivity or COPPER_RESISTIVITY
+        self._thickness = thickness or COPPER_1OZ_THICKNESS
         self._arc_adjustment_factor = arc_adjustment_factor or self.DEFAULT_ARC_ADJUSTMENT_FACTOR
-        self._tcr = tcr or self.DEFAULT_COPPER_TCR
+        self._tcr = tcr or COPPER_TCR
         self._net = net
     
     @property
@@ -533,28 +564,9 @@ class TraceSegmentFactory:
         
         # Apply temperature coefficient of resistance to final result if temperature provided
         if temperature_celsius is not None:
-            total_resistance = self._apply_temperature_adjustment(total_resistance, temperature_celsius)
+            total_resistance = temperature_adjust_resistance(total_resistance, 20.0, temperature_celsius, self.tcr)
         
         return total_resistance
-    
-    def _apply_temperature_adjustment(self, resistance_at_20c: float, temperature_celsius: float) -> float:
-        """
-        Apply temperature coefficient of resistance adjustment.
-        
-        Args:
-            resistance_at_20c: Resistance at 20°C
-            temperature_celsius: Temperature in °C
-        
-        Returns:
-            Temperature-adjusted resistance
-        """
-        # TCR formula: R(T) = R(20°C) * [1 + α * (T - 20°C)]
-        # where α is the temperature coefficient of resistance
-        temperature_diff = temperature_celsius - 20.0
-        adjusted_resistance = resistance_at_20c * (1 + self.tcr * temperature_diff)
-        return adjusted_resistance
-
-
     
 
 # Example usage and testing

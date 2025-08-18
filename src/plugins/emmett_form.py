@@ -8,7 +8,7 @@ import pcbnew
 from .emmett_dialog import EmmettDialog
 from .board_builder import BoardBuilder
 from .board_analyzer import BoardAnalyzer
-from .trace_segment_factory import TraceSegmentFactory
+from .trace_segment_factory import TraceSegmentFactory, temperature_adjust_resistance
 from .my_debug import debug,enable_debug, stringify
 from .track_router import TrackRouter
 from .al_track_router import AlTrackRouter
@@ -93,28 +93,24 @@ class EmmettForm(EmmettDialog):
         # down by a factor of about 1/3.36. I then extrapolated that into the power formula below.
         # It may or may not work well. We would need more empirical data to be sure or maybe a Phd in physics of heat flow.
         thermal_resistance = 2.8 * (10000/area) ** 0.874230616502018
-        fset(self.thermal_resistance, thermal_resistance)
-        self.thermal_resistance_value = self.thermal_resistance.GetValue()
+        self.thermal_resistance_value = fset(self.thermal_resistance, thermal_resistance)
 
         # If power is set, then use that and calculate the power margin, otherwise calcualte required power based on the power margin
         if self.heater_power.GetValue() != "":
             power = float(self.heater_power.GetValue())
             margin = self.calculate_power_margin(power)
-            fset(self.power_margin, round(margin, 2))
-            self.power_margin_value = self.power_margin.GetValue()
+            self.power_margin_value = fset(self.power_margin, round(margin, 2))
         else:
             # If there's no power margin, either, then default to 100%
             margin = float(self.power_margin.GetValue() or 100)
             power = self.calculate_margin_power(margin)
-            fset(self.heater_power, round(power, 2))
-            self.heater_power_value = self.heater_power.GetValue()
+            self.heater_power_value = fset(self.heater_power, round(power, 2))
 
         # If we have been given the operating voltage, then calculate the target resistance
         if self.heater_voltage.GetValue() != "":
             voltage = float(self.heater_voltage.GetValue())
             target_resistance = voltage * voltage / power
-            fset(self.target_resistance, target_resistance)
-            self.target_resistance_value = self.target_resistance.GetValue()
+            self.target_resistance_value = fset(self.target_resistance, target_resistance)
         else:
             if self.target_resistance.GetValue() == "" and self.hot_resistance.GetValue() != "":
                 self.target_resistance.ChangeValue(self.hot_resistance.GetValue())
@@ -122,15 +118,11 @@ class EmmettForm(EmmettDialog):
 
             # If we have been given the target resistance, then calculate the operating voltage
             if self.target_resistance.GetValue() != "":
-                target_resistance = float(self.target_resistance.GetValue())
+                target_resistance = fget(self.target_resistance)
                 voltage = round(sqrt(target_resistance * power), 2)
-                fset(self.heater_voltage, voltage)
-                self.heater_voltage_value = self.heater_voltage.GetValue()
+                self.heater_voltage_value = fset(self.heater_voltage, voltage)
 
-        self.recalculate_cold_current()
-
-    def recalculate_cold_current(self):
-        fset(self.cold_current, sqrt(fget(self.heater_power) / fget(self.cold_resistance)))
+        self.calculate_cold_current()
 
     def click_resize_button(self, event):
         # We will work in microns and round to the nearest micron before applying to the board.
@@ -422,7 +414,19 @@ class EmmettForm(EmmettDialog):
     def calculate_target_resistance(self) -> float:
         power = fget(self.heater_power)
         voltage = fget(self.heater_voltage)
-        return voltage * voltage / power
+        target_resistance = voltage * voltage / power
+        self.target_resistance_value = fset(self.target_resistance, target_resistance)
+        self.calculate_cold_current()
+        return target_resistance
+
+    def calculate_cold_current(self):
+        tr = fget(self.target_resistance)
+        at = fget(self.ambient_temperature)
+        mt = fget(self.maximum_temperature)
+        hp = fget(self.heater_power)
+        cold_resistance = temperature_adjust_resistance(tr, mt, at)
+        debug(f"target_resistance: {tr}, ambient_temperature: {at}, maximum_temperature: {mt}, heater_power: {hp}, cold_resistance: {cold_resistance}")
+        fset(self.cold_current, sqrt(hp / cold_resistance))
 
     def power_margin_leave(self, event):
         newValue = field_normalize(self.power_margin)
@@ -436,6 +440,21 @@ class EmmettForm(EmmettDialog):
         fset(self.heater_power, round(power, 2))
         self.heater_power_leave(event)
 
+    def thermal_resistance_change(self, event):
+        self.thermal_resistance_leave(event)
+
+    def thermal_resistance_leave(self, event):
+        newValue = field_normalize(self.thermal_resistance)
+        debug(f"thermal_resistance_leave: {newValue}")
+        if newValue == self.thermal_resistance_value:
+            return
+
+        self.thermal_resistance_value = newValue
+
+        power = self.calculate_margin_power(None)
+        fset(self.heater_power, round(power, 2))
+        self.heater_power_leave(event)
+
     def heater_power_enter(self, event):
         self.heater_power_leave(event)
 
@@ -446,15 +465,11 @@ class EmmettForm(EmmettDialog):
             return
 
         self.heater_power_value = newValue
-        self.recalculate_cold_current()
 
         margin = self.calculate_power_margin(float(newValue))
-        fset(self.power_margin, round(margin, 1))
-        self.power_margin_value = self.power_margin.GetValue()
+        self.power_margin_value = fset(self.power_margin, round(margin, 1))
 
-        resistance = self.calculate_target_resistance()
-        fset(self.target_resistance, resistance)
-        self.target_resistance_value = self.target_resistance.GetValue()
+        self.calculate_target_resistance()
 
     def heater_voltage_enter(self, event):
         self.heater_voltage_leave(event)
@@ -467,9 +482,7 @@ class EmmettForm(EmmettDialog):
 
         self.heater_voltage_value = newValue
 
-        resistance = self.calculate_target_resistance()
-        fset(self.target_resistance, resistance)
-        self.target_resistance_value = self.target_resistance.GetValue()
+        self.calculate_target_resistance()
 
     def ambient_temperature_enter(self, event):
         self.ambient_temperature_leave(event)

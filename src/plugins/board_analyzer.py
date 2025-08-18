@@ -16,7 +16,6 @@ from .pad_defs import RectangularPad, CircularPad
 from .vector_utils import distance
 from .my_debug import debug, stringify, enable_debug, stringify
 
-enable_debug()
 KICAD_UNITS = 1e-9
 KICAD_MM = 1e-6
 
@@ -92,19 +91,15 @@ class BoardAnalyzer:
 
         for fp in footprints:
             pads = fp.Pads()
-            #debug(f"Found {len(pads)} pads on {stringify(fp)}")
             for pad in pads:
-                #debug(f"Pad {pad.GetPosition().x*KICAD_MM:.3f}, {pad.GetPosition().y*KICAD_MM:.3f}")
                 if pad.GetLayerSet().Contains(layer_id):
                     d = distance(point, (pad.GetPosition().x, pad.GetPosition().y))
-                    #debug(f"Distance: {d}, Closest: {closest_distance}, {stringify(closest)}")
                     if d < closest_distance:
                         closest = pad
                         footprint = fp
                         closest_distance = d
 
         if closest is None:
-            debug(f"No pad found on layer {layer} near ({point[0]*KICAD_MM:.3f}, {point[1]*KICAD_MM:.3f}). closest: {stringify(closest)}, closest_distance: {closest_distance}")
             raise Exception(f"No pad found on layer {layer} near ({point[0]*KICAD_MM:.3f}, {point[1]*KICAD_MM:.3f})")
 
         # Return a RectangularPad object representing the location of the pad and it's size
@@ -115,11 +110,9 @@ class BoardAnalyzer:
         if 45 <= fabs(footprint.GetOrientationDegrees()) <= 135:
             width = closest.GetSizeY()
             height = closest.GetSizeX()
-            debug(f"Pad is rotated, width: {width}, height: {height}, orientation: {footprint.GetOrientationDegrees()}")
         else:
             width = closest.GetSizeX()
             height = closest.GetSizeY()
-            debug(f"Pad is not rotated, width: {width}, height: {height}, orientation: {footprint.GetOrientationDegrees()}")
 
         result = RectangularPad(
             closest.GetPosition().x * units,
@@ -142,17 +135,13 @@ class BoardAnalyzer:
         closest_distance = float('inf')
 
         for fp in footprints:
-            #debug(f"Footprint: {stringify(fp)}, Through-hole: {fp.HasThroughHolePads()}, On copper: {fp.IsOnLayer(f_cu)}")
-            debug(f"footprint: {fp.GetPosition()}, point: {point}")
             if fp.HasThroughHolePads() and not fp.IsOnLayer(f_cu):
                 d = distance(point, (fp.GetPosition().x, fp.GetPosition().y))
-                #debug(f"Footprint: {stringify(fp)}, Distance: {d}, Closest: {closest_distance}, {stringify(closest)}")
                 if d < closest_distance:
                     closest = fp
                     closest_distance = d
             
         if closest is None:
-            debug(f"No hole found near ({point[0]*KICAD_MM:.3f}, {point[1]*KICAD_MM:.3f}), closest: {stringify(closest)}, closest_distance: {closest_distance}")
             raise Exception(f"No hole found near ({point[0]*KICAD_MM:.3f}, {point[1]*KICAD_MM:.3f})")
           
         # Return a CircularPad object representing the location of the hole and it's size
@@ -165,7 +154,6 @@ class BoardAnalyzer:
             3.4e6 * units # 6.8mm diameter in nm radius to make up the 10mm clearance
         )
 
-        debug(f"closest hole: {stringify(closest)}")
         result.footprint = closest
         return result
 

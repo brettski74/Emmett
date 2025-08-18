@@ -22,8 +22,6 @@ from .my_debug import debug, enable_debug
 
 KICAD_MICRONS = 1e-3
 
-enable_debug()
-
 class AlTrackRouter(TrackRouter):
     """
     Track Router for aluminium PCB hotplate elements.
@@ -127,8 +125,6 @@ class AlTrackRouter(TrackRouter):
 
         centre = ((left + right) / 2, (top + bottom) / 2)
 
-        debug(f"Extents: {left}, {top}, {right}, {bottom}, Centre: {centre}")
-
         self.left = left * KICAD_MICRONS
         self.top = top * KICAD_MICRONS
         self.right = right * KICAD_MICRONS
@@ -145,14 +141,12 @@ class AlTrackRouter(TrackRouter):
             analyzer.get_closest_pad((centre[0], centre[1] - FIND_OFFSET), "F.Cu", KICAD_MICRONS),
             analyzer.get_closest_pad((centre[0], centre[1] + FIND_OFFSET), "F.Cu", KICAD_MICRONS)
         )
-        debug(f"Fuse: {self.fuse[0]}, {self.fuse[0].footprint.GetOrientationDegrees()}, {self.fuse[1]}, {self.fuse[1].footprint.GetOrientationDegrees()}");
         
         # Power connections are expected to be either side of the centre of the top edge of the board
         self.connections = (
             analyzer.get_closest_pad((left, top), "F.Cu", KICAD_MICRONS),
             analyzer.get_closest_pad((right, top), "F.Cu", KICAD_MICRONS)
         )
-        debug(f"Connections: {self.connections[0]}, {self.connections[0].footprint.GetOrientationDegrees()}, {self.connections[1]}, {self.connections[1].footprint.GetOrientationDegrees()}");
 
         # Mounting holes are expected to be in the four corners of the board
         self.holes = (
@@ -183,11 +177,9 @@ class AlTrackRouter(TrackRouter):
         fp = self.connections[0].footprint
         position = pcbnew.VECTOR2I_MM(self.left_pad[0]*1e-3, self.left_pad[1]*1e-3)
         fp.SetPosition(position)
-        debug(f"left_pad: {self.left_pad}, position: {position}")
         fp = self.connections[1].footprint
         position = pcbnew.VECTOR2I_MM(self.right_pad[0]*1e-3, self.right_pad[1]*1e-3)
         fp.SetPosition(position)
-        debug(f"right_pad: {self.right_pad}, position: {position}")
 
         pcbnew.Refresh()
 
@@ -602,8 +594,6 @@ class AlTrackRouter(TrackRouter):
         track_count = 2 * floor(working_width / 5000)
         self.spacing = minimum_spacing
 
-        debug(f"Starting out with {track_count} tracks")
-
         resistance = 0
         last_resistance = 0
         last_tracks = None
@@ -615,7 +605,6 @@ class AlTrackRouter(TrackRouter):
             tracks = self.generate_tracks()
             resistance = self.factory.calculate_total_resistance(tracks, target_temperature)
 
-            debug(f"Pitch: {self.pitch}, Width: {self.width}, Spacing: {self.spacing}, Resistance: {resistance}, Target: {target_resistance}")
             if resistance > target_resistance:
                 track_count = track_count - 2
                 resistance = last_resistance
@@ -653,7 +642,6 @@ class AlTrackRouter(TrackRouter):
 
             tracks = self.generate_tracks()
             resistance = self.factory.calculate_total_resistance(tracks, target_temperature)
-            debug(f"Depth: {depth}, Width: {self.width}, Spacing: {self.spacing}, Pitch: {self.pitch}, Resistance: {resistance}, Target: {target_resistance}")
         
         if depth <= 0:
             self.pitch = save_pitch
