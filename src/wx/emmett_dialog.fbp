@@ -342,10 +342,10 @@
                                       <property name="resize">Resizable</property>
                                       <property name="show">1</property>
                                       <property name="size"></property>
-                                      <property name="style">wxTE_CENTER</property>
+                                      <property name="style">wxTE_CENTER|wxTE_PROCESS_ENTER</property>
                                       <property name="subclass">; ; forward_declare</property>
                                       <property name="toolbar_pane">0</property>
-                                      <property name="tooltip">the maximum voltage available to power this hotplate.</property>
+                                      <property name="tooltip">The maximum voltage available to power this hotplate.</property>
                                       <property name="validator_data_type"></property>
                                       <property name="validator_style">wxFILTER_NONE</property>
                                       <property name="validator_type">wxDefaultValidator</property>
@@ -472,7 +472,7 @@
                                       <property name="resize">Resizable</property>
                                       <property name="show">1</property>
                                       <property name="size"></property>
-                                      <property name="style">wxTE_CENTER</property>
+                                      <property name="style">wxTE_CENTER|wxTE_PROCESS_ENTER</property>
                                       <property name="subclass">; ; forward_declare</property>
                                       <property name="toolbar_pane">0</property>
                                       <property name="tooltip">The design power for this hotplate.</property>
@@ -780,7 +780,7 @@
                                           <property name="resize">Resizable</property>
                                           <property name="show">1</property>
                                           <property name="size"></property>
-                                          <property name="style">wxTE_CENTER</property>
+                                          <property name="style">wxTE_CENTER|wxTE_PROCESS_ENTER</property>
                                           <property name="subclass">; ; forward_declare</property>
                                           <property name="toolbar_pane">0</property>
                                           <property name="tooltip">The maximum design temperature for this hotplate.</property>
@@ -910,7 +910,7 @@
                                           <property name="resize">Resizable</property>
                                           <property name="show">1</property>
                                           <property name="size"></property>
-                                          <property name="style">wxTE_CENTER|wxTE_READONLY</property>
+                                          <property name="style">wxTE_CENTER|wxTE_PROCESS_ENTER</property>
                                           <property name="subclass">; ; forward_declare</property>
                                           <property name="toolbar_pane">0</property>
                                           <property name="tooltip">The expected temperature of the ambient air in which this hotplate will operate.</property>
@@ -1040,7 +1040,7 @@
                                           <property name="resize">Resizable</property>
                                           <property name="show">1</property>
                                           <property name="size"></property>
-                                          <property name="style">wxTE_CENTER</property>
+                                          <property name="style">wxTE_CENTER|wxTE_PROCESS_ENTER</property>
                                           <property name="subclass">; ; forward_declare</property>
                                           <property name="toolbar_pane">0</property>
                                           <property name="tooltip">The thermal resistance from the hotplate to the ambient air. This estimates how quickly it loses heat to the surroundings.</property>
@@ -1170,7 +1170,7 @@
                                           <property name="resize">Resizable</property>
                                           <property name="show">1</property>
                                           <property name="size"></property>
-                                          <property name="style">wxTE_CENTER</property>
+                                          <property name="style">wxTE_CENTER|wxTE_PROCESS_ENTER</property>
                                           <property name="subclass">; ; forward_declare</property>
                                           <property name="toolbar_pane">0</property>
                                           <property name="tooltip">How much power above holding power to assume for the design. 100% is recommended. Values below 25% are slow and impractical. </property>
@@ -1543,7 +1543,7 @@
                                   <property name="resize">Resizable</property>
                                   <property name="show">1</property>
                                   <property name="size"></property>
-                                  <property name="style">wxTE_CENTER</property>
+                                  <property name="style">wxTE_CENTER|wxTE_PROCESS_ENTER</property>
                                   <property name="subclass">; ; forward_declare</property>
                                   <property name="toolbar_pane">0</property>
                                   <property name="tooltip">The thickness of the copper traces in microns.</property>
@@ -4131,7 +4131,7 @@
                     <property name="window_extra_style"></property>
                     <property name="window_name"></property>
                     <property name="window_style"></property>
-                    <event name="OnButtonClick">click_analyze_button</event>
+                    <event name="OnButtonClick">click_geometryze_button</event>
                   </object>
                 </object>
               </object>
@@ -4244,7 +4244,7 @@
                     <property name="context_help"></property>
                     <property name="context_menu">1</property>
                     <property name="current"></property>
-                    <property name="default">1</property>
+                    <property name="default">0</property>
                     <property name="default_pane">0</property>
                     <property name="disabled"></property>
                     <property name="dock">Dock</property>

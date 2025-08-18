@@ -42,7 +42,7 @@ class EmmettDialog ( wx.Dialog ):
 
         fgElectricalSpecifications.Add( self.m_Voltage, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT|wx.ALL, 5 )
 
-        self.heater_voltage = wx.TextCtrl( sbElectricalSpecifications.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER, wx.DefaultValidator, u"heater_voltage" )
+        self.heater_voltage = wx.TextCtrl( sbElectricalSpecifications.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER|wx.TE_PROCESS_ENTER, wx.DefaultValidator, u"heater_voltage" )
         self.heater_voltage.SetToolTip( u"The maximum voltage available to power this hotplate." )
 
         fgElectricalSpecifications.Add( self.heater_voltage, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_LEFT|wx.ALL, 5 )
@@ -52,7 +52,7 @@ class EmmettDialog ( wx.Dialog ):
 
         fgElectricalSpecifications.Add( self.m_Power, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT|wx.ALL, 5 )
 
-        self.heater_power = wx.TextCtrl( sbElectricalSpecifications.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER, wx.DefaultValidator, u"heater_power" )
+        self.heater_power = wx.TextCtrl( sbElectricalSpecifications.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER|wx.TE_PROCESS_ENTER, wx.DefaultValidator, u"heater_power" )
         self.heater_power.SetToolTip( u"The design power for this hotplate." )
 
         fgElectricalSpecifications.Add( self.heater_power, 0, wx.ALL, 5 )
@@ -89,7 +89,7 @@ class EmmettDialog ( wx.Dialog ):
 
         fgThermalSpecifications.Add( self.m_MaximumTemperature, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT|wx.ALL, 5 )
 
-        self.maximum_temperature = wx.TextCtrl( sbThermalSpecifications.GetStaticBox(), wx.ID_ANY, u"220", wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER, wx.DefaultValidator, u"maximum_temperature" )
+        self.maximum_temperature = wx.TextCtrl( sbThermalSpecifications.GetStaticBox(), wx.ID_ANY, u"220", wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER|wx.TE_PROCESS_ENTER, wx.DefaultValidator, u"maximum_temperature" )
         self.maximum_temperature.SetToolTip( u"The maximum design temperature for this hotplate." )
 
         fgThermalSpecifications.Add( self.maximum_temperature, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_LEFT|wx.ALL, 5 )
@@ -99,7 +99,7 @@ class EmmettDialog ( wx.Dialog ):
 
         fgThermalSpecifications.Add( self.m_AmbientTemperature, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT|wx.ALL, 5 )
 
-        self.ambient_temperature = wx.TextCtrl( sbThermalSpecifications.GetStaticBox(), wx.ID_ANY, u"25", wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER|wx.TE_READONLY, wx.DefaultValidator, u"ambient_temperature" )
+        self.ambient_temperature = wx.TextCtrl( sbThermalSpecifications.GetStaticBox(), wx.ID_ANY, u"25", wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER|wx.TE_PROCESS_ENTER, wx.DefaultValidator, u"ambient_temperature" )
         self.ambient_temperature.SetToolTip( u"The expected temperature of the ambient air in which this hotplate will operate." )
 
         fgThermalSpecifications.Add( self.ambient_temperature, 0, wx.ALL, 5 )
@@ -109,7 +109,7 @@ class EmmettDialog ( wx.Dialog ):
 
         fgThermalSpecifications.Add( self.m_ThermalResistance, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT|wx.ALL, 5 )
 
-        self.thermal_resistance = wx.TextCtrl( sbThermalSpecifications.GetStaticBox(), wx.ID_ANY, u"2.8", wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER, wx.DefaultValidator, u"thermal_resistance" )
+        self.thermal_resistance = wx.TextCtrl( sbThermalSpecifications.GetStaticBox(), wx.ID_ANY, u"2.8", wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER|wx.TE_PROCESS_ENTER, wx.DefaultValidator, u"thermal_resistance" )
         self.thermal_resistance.SetToolTip( u"The thermal resistance from the hotplate to the ambient air. This estimates how quickly it loses heat to the surroundings." )
 
         fgThermalSpecifications.Add( self.thermal_resistance, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_LEFT|wx.ALL, 5 )
@@ -119,7 +119,7 @@ class EmmettDialog ( wx.Dialog ):
 
         fgThermalSpecifications.Add( self.m_PowerMargin, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT|wx.ALL, 5 )
 
-        self.power_margin = wx.TextCtrl( sbThermalSpecifications.GetStaticBox(), wx.ID_ANY, u"100", wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER, wx.DefaultValidator, u"power_margin" )
+        self.power_margin = wx.TextCtrl( sbThermalSpecifications.GetStaticBox(), wx.ID_ANY, u"100", wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER|wx.TE_PROCESS_ENTER, wx.DefaultValidator, u"power_margin" )
         self.power_margin.SetToolTip( u"How much power above holding power to assume for the design. 100% is recommended. Values below 25% are slow and impractical. " )
 
         fgThermalSpecifications.Add( self.power_margin, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_LEFT|wx.ALL, 5 )
@@ -171,7 +171,7 @@ class EmmettDialog ( wx.Dialog ):
 
         bTrackThickness.Add( self.m_TrackThickness, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT|wx.ALL, 5 )
 
-        self.track_thickness = wx.TextCtrl( sbTrackSpecifications.GetStaticBox(), wx.ID_ANY, u"35", wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER, wx.DefaultValidator, u"track_thickness" )
+        self.track_thickness = wx.TextCtrl( sbTrackSpecifications.GetStaticBox(), wx.ID_ANY, u"35", wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER|wx.TE_PROCESS_ENTER, wx.DefaultValidator, u"track_thickness" )
         self.track_thickness.SetToolTip( u"The thickness of the copper traces in microns." )
 
         bTrackThickness.Add( self.track_thickness, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_LEFT|wx.ALL, 5 )
@@ -464,8 +464,6 @@ class EmmettDialog ( wx.Dialog ):
         bSizer41.Add( self.clear_button, 0, wx.ALIGN_BOTTOM|wx.ALIGN_RIGHT|wx.ALL, 5 )
 
         self.apply_button = wx.Button( self, wx.ID_OK, u"Apply 1.21GW!", wx.DefaultPosition, wx.DefaultSize, 0, wx.DefaultValidator, u"applyButton" )
-
-        self.apply_button.SetDefault()
         self.apply_button.SetToolTip( u"Clear the board and generate new tracks." )
 
         bSizer41.Add( self.apply_button, 0, wx.ALIGN_CENTER|wx.ALIGN_CENTER_HORIZONTAL|wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5 )
@@ -531,7 +529,7 @@ class EmmettDialog ( wx.Dialog ):
         self.load_button.Bind( wx.EVT_BUTTON, self.click_load_button )
         self.save_button.Bind( wx.EVT_BUTTON, self.click_save_button )
         self.analyze_button.Bind( wx.EVT_BUTTON, self.click_analyze_button )
-        self.calculate_button.Bind( wx.EVT_BUTTON, self.click_analyze_button )
+        self.calculate_button.Bind( wx.EVT_BUTTON, self.click_geometryze_button )
         self.clear_button.Bind( wx.EVT_BUTTON, self.click_clear_button )
         self.apply_button.Bind( wx.EVT_BUTTON, self.click_apply_button )
         self.close_button.Bind( wx.EVT_BUTTON, self.click_close_button )
@@ -661,6 +659,8 @@ class EmmettDialog ( wx.Dialog ):
     def click_analyze_button( self, event ):
         event.Skip()
 
+    def click_geometryze_button( self, event ):
+        event.Skip()
 
     def click_clear_button( self, event ):
         event.Skip()

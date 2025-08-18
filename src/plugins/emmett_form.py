@@ -94,35 +94,38 @@ class EmmettForm(EmmettDialog):
         # It may or may not work well. We would need more empirical data to be sure or maybe a Phd in physics of heat flow.
         thermal_resistance = 2.8 * (10000/area) ** 0.874230616502018
         fset(self.thermal_resistance, thermal_resistance)
+        self.thermal_resistance_value = self.thermal_resistance.GetValue()
 
-        # Determine power required to hold the hotplate at the maximum temperature.
-        hold_power = round((fget(self.maximum_temperature) - fget(self.ambient_temperature)) / thermal_resistance, 2)
-        
         # If power is set, then use that and calculate the power margin, otherwise calcualte required power based on the power margin
         if self.heater_power.GetValue() != "":
             power = float(self.heater_power.GetValue())
-            margin = round((power / hold_power - 1) * 100, 2)
-            fset(self.power_margin, margin)
+            margin = self.calculate_power_margin(power)
+            fset(self.power_margin, round(margin, 2))
+            self.power_margin_value = self.power_margin.GetValue()
         else:
             # If there's no power margin, either, then default to 100%
             margin = float(self.power_margin.GetValue() or 100)
-            power = hold_power * (1 + margin/100)
-            fset(self.heater_power, power)
+            power = self.calculate_margin_power(margin)
+            fset(self.heater_power, round(power, 2))
+            self.heater_power_value = self.heater_power.GetValue()
 
         # If we have been given the operating voltage, then calculate the target resistance
         if self.heater_voltage.GetValue() != "":
             voltage = float(self.heater_voltage.GetValue())
             target_resistance = voltage * voltage / power
             fset(self.target_resistance, target_resistance)
+            self.target_resistance_value = self.target_resistance.GetValue()
         else:
             if self.target_resistance.GetValue() == "" and self.hot_resistance.GetValue() != "":
                 self.target_resistance.ChangeValue(self.hot_resistance.GetValue())
+                self.target_resistance_value = self.target_resistance.GetValue()
 
             # If we have been given the target resistance, then calculate the operating voltage
             if self.target_resistance.GetValue() != "":
                 target_resistance = float(self.target_resistance.GetValue())
                 voltage = round(sqrt(target_resistance * power), 2)
                 fset(self.heater_voltage, voltage)
+                self.heater_voltage_value = self.heater_voltage.GetValue()
 
     def click_resize_button(self, event):
         # We will work in microns and round to the nearest micron before applying to the board.
@@ -245,7 +248,9 @@ class EmmettForm(EmmettDialog):
                 self.track_order = 0x123
 
             cold = fdefault(self.ambient_temperature, 25)
+            self.ambient_temperature_value = self.ambient_temperature.GetValue()
             hot = fdefault(self.maximum_temperature, 220)
+            self.maximum_temperature_value = self.maximum_temperature.GetValue()
 
             fset(self.cold_resistance, factory.calculate_total_resistance(tracks, float(cold)))
             fset(self.hot_resistance, factory.calculate_total_resistance(tracks, float(hot)))
@@ -395,3 +400,115 @@ class EmmettForm(EmmettDialog):
             newValue = fadd(self.track_width, self.track_spacing)
             self.track_pitch.ChangeValue(newValue)
             self.track_pitch_value = newValue
+
+    def power_margin_enter(self, event):
+        self.power_margin_leave(event)
+
+    def calculate_margin_power(self, margin: float) -> float:
+        margin = margin or fget(self.power_margin)
+        hold_power = (fget(self.maximum_temperature) - fget(self.ambient_temperature)) / fget(self.thermal_resistance)
+        return hold_power * (1 + margin/100)
+
+    def calculate_power_margin(self, power: float) -> float:
+        power = power or fget(self.heater_power)
+        hold_power = (fget(self.maximum_temperature) - fget(self.ambient_temperature)) / fget(self.thermal_resistance)
+        return (power / hold_power - 1) * 100
+
+    def calculate_target_resistance(self) -> float:
+        power = fget(self.heater_power)
+        voltage = fget(self.heater_voltage)
+        return voltage * voltage / power
+
+    def power_margin_leave(self, event):
+        newValue = field_normalize(self.power_margin)
+        debug(f"power_margin_leave: {newValue}")
+        if newValue == self.power_margin_value:
+            return
+
+        self.power_margin_value = newValue
+
+        power = self.calculate_margin_power(float(newValue))
+        fset(self.heater_power, round(power, 2))
+        self.heater_power_leave(event)
+
+    def heater_power_enter(self, event):
+        self.heater_power_leave(event)
+
+    def heater_power_leave(self, event):
+        newValue = field_normalize(self.heater_power)
+        debug(f"heater_power_leave: {newValue}")
+        if newValue == self.heater_power_value:
+            return
+
+        self.heater_power_value = newValue
+
+        margin = self.calculate_power_margin(float(newValue))
+        fset(self.power_margin, round(margin, 1))
+        self.power_margin_value = self.power_margin.GetValue()
+
+        resistance = self.calculate_target_resistance()
+        fset(self.target_resistance, resistance)
+        self.target_resistance_value = self.target_resistance.GetValue()
+
+    def heater_voltage_enter(self, event):
+        self.heater_voltage_leave(event)
+
+    def heater_voltage_leave(self, event):
+        newValue = field_normalize(self.heater_voltage)
+        debug(f"heater_voltage_leave: {newValue}")
+        if newValue == self.heater_voltage_value:
+            return
+
+        self.heater_voltage_value = newValue
+
+        resistance = self.calculate_target_resistance()
+        fset(self.target_resistance, resistance)
+        self.target_resistance_value = self.target_resistance.GetValue()
+
+    def ambient_temperature_enter(self, event):
+        self.ambient_temperature_leave(event)
+
+    def ambient_temperature_leave(self, event):
+        newValue = field_normalize(self.ambient_temperature)
+        debug(f"ambient_temperature_leave: {newValue}")
+        if newValue == self.ambient_temperature_value:
+            return
+
+        self.ambient_temperature_value = newValue
+
+        power = self.calculate_margin_power(None)
+        fset(self.heater_power, round(power, 2))
+        self.heater_power_leave(event)
+
+    def maximum_temperature_enter(self, event):
+        self.maximum_temperature_leave(event)
+
+    def maximum_temperature_leave(self, event):
+        newValue = field_normalize(self.maximum_temperature)
+        debug(f"maximum_temperature_leave: {newValue}")
+        if newValue == self.maximum_temperature_value:
+            return
+
+        self.maximum_temperature_value = newValue
+
+        power = self.calculate_margin_power(None)
+        fset(self.heater_power, round(power, 2))
+        self.heater_power_leave(event)
+
+    def click_geometryze_button(self, event):
+        try:
+            self.router.optimize_tracks(fget(self.minimum_spacing) * 1000, fget(self.target_resistance), fget(self.maximum_temperature))
+
+            self.track_pitch_value = fset(self.track_pitch, self.router.pitch / 1000, True)
+            self.track_spacing_value = fset(self.track_spacing, self.router.spacing / 1000, True)
+            self.track_width_value = fset(self.track_width, self.router.width / 1000, True)
+            self.track_order = 0x231
+
+            self.m_main_notebook.ChangeSelection(1)
+        except Exception as e:
+            msg = f"Error optimizing tracks: {e}"
+            msg += f"\n{traceback.format_exc()}"
+            wx.MessageBox(msg, "Emmett Error", wx.OK | wx.ICON_ERROR)
+
+
+

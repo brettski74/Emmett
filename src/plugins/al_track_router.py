@@ -5,7 +5,7 @@ This module provides a basic track router that demonstrates how to implement
 the abstract TrackRouter class.
 """
 import wx
-from math import sqrt, ceil, fabs
+from math import sqrt, ceil, fabs, floor
 
 import pcbnew
 
@@ -303,7 +303,6 @@ class AlTrackRouter(TrackRouter):
 
         pad = pad * 1e6 / count
         self.left_pad = (pad, self.top + self.margin + self.connections[0].height/2)
-        debug(f"left_pad: {self.left_pad}, top: {self.top}, margin: {self.margin}, height: {self.connections[0].height}")
 
         result[0].move_start((0, -pitch))
 
@@ -324,7 +323,6 @@ class AlTrackRouter(TrackRouter):
         )
 
         #tracks.append(self.corner_90(add_vec(tracks[-1].end_point, (-pitch/2, pitch/2)), tracks[-1].end_point))
-        debug(f"fuse_left: {self.fuse_left}, xfstart: {xfstart}, fuse_right: {self.fuse_right}, yfstart: {yfstart}, yfend: {yfend}, pitch: {self.pitch}, tracks[0]: {tracks[0]}, result[0]: {result[0]}")
         tracks.append(self.factory.create_linear_segment(
             scale_vec(((self.fuse_left - self.pitch/2), (self.fuse[0].clear_bottom() + self.width/2)), 1e-6),
             scale_vec(((self.fuse_right - 1.5*self.pitch - spacing_adjust/2), (self.fuse[0].clear_bottom() + self.width/2)), 1e-6),
@@ -575,3 +573,90 @@ class AlTrackRouter(TrackRouter):
         arc.move((0, offset))
         inl.move_end((0, offset))
         out.move_start((0, offset))
+
+    def optimize_tracks(self, minimum_spacing: float, target_resistance: float, target_temperature: float):
+        """
+        For a fixed track spacing and varying track width, the track resistance varies fairly
+        continuously until the track width changes enough that the number of serpentine tracks that
+        fit across the face of the board increases. When this happens, there is a large, discontinuous
+        jump in the track resistance versus track width. These discontinuities present a problem
+        for optimization. To avoid this, we want to search within a continuous range.
+
+        The way we do this is to find the track pitch required for each even number of tracks across
+        the width of the board. We calculate the resistance for this track pitch with the minimum
+        spacing. We keep increasing the number of tracks across the board width by 2 until we find
+        the smallest track pitch that still produces a resistance that is lower than the target
+        resistance. Once we have that, we hold the track pitch constant and increase the track
+        spacing until the resistance matches the target resistance, within a reasonable tolerance.
+
+        Returns a two-element tuple containing the track width and track spacing in microns
+        """
+        # Save the current state in case we fail and want to roll back
+        save_pitch = self.pitch
+        save_width = self.width
+        save_spacing = self.spacing
+
+        # Assume that we're never going to have track widths greater than 2.5mm
+        # The -10 on the end is a hedge against rounding errors - hopefully enough!
+        working_width = self.right - self.left - 2*self.margin + self.spacing - 10
+        track_count = 2 * floor(working_width / 5000)
+        self.spacing = minimum_spacing
+
+        debug(f"Starting out with {track_count} tracks")
+
+        resistance = 0
+        last_resistance = 0
+        last_tracks = None
+
+        while resistance < target_resistance:
+            self.pitch = working_width / track_count
+            self.width = self.pitch - self.spacing
+
+            tracks = self.generate_tracks()
+            resistance = self.factory.calculate_total_resistance(tracks, target_temperature)
+
+            debug(f"Pitch: {self.pitch}, Width: {self.width}, Spacing: {self.spacing}, Resistance: {resistance}, Target: {target_resistance}")
+            if resistance > target_resistance:
+                track_count = track_count - 2
+                resistance = last_resistance
+                tracks = last_tracks
+                break
+
+            last_tracks = tracks
+            last_resistance = resistance
+            track_count = track_count + 2
+
+        if resistance == 0:
+            self.pitch = save_pitch
+            self.width = save_width
+            self.spacing = save_spacing
+            raise ValueError(f"No track pitch < 2.5mm found for target resistance of {target_resistance} ohms")
+
+        self.pitch = working_width / track_count
+        self.width = self.pitch - self.spacing
+        
+        depth = 100
+
+        # Assume that track length will be roughly equal for a given track pitch, so track resistance
+        # is roughly inversely proportional to track width = pitch - spacing.
+        # So back-calculate the track width for the resistance we want based on the resistance and
+        # track width we already have and test. Keep repeating until we're within tolerance of our
+        # target resistance (within +/- 0.0005 ohms)
+        # Add the depth check in there to avoid an infinite loop if something unforeseen happens with
+        # the numbers
+        while depth > 0 and fabs(target_resistance - resistance) > 0.000005:
+            depth = depth - 1
+
+            k = resistance * self.width
+            self.width = k / target_resistance
+            self.spacing = self.pitch - self.width
+
+            tracks = self.generate_tracks()
+            resistance = self.factory.calculate_total_resistance(tracks, target_temperature)
+            debug(f"Depth: {depth}, Width: {self.width}, Spacing: {self.spacing}, Pitch: {self.pitch}, Resistance: {resistance}, Target: {target_resistance}")
+        
+        if depth <= 0:
+            self.pitch = save_pitch
+            self.width = save_width
+            self.spacing = save_spacing
+            raise ValueError(f"No track width/spacing found for target resistance of {target_resistance} ohms")

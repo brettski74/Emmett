@@ -84,6 +84,9 @@ class TraceSegment(ABC):
         """Get the width of the trace segment in meters."""
         return self.width
 
+    def __str__(self):
+        return f"{self.__class__.__name__}(start={self.start_point}, end={self.end_point}, width={self.width})"
+
     def get_resistance(self, temperature_celsius: Optional[float] = None) -> float:
         """
         Calculate resistance of a trace segment.
@@ -146,6 +149,9 @@ class LinearSegment(TraceSegment):
         self.move_start(offset)
         self.move_end(offset)
 
+    def __str__(self):
+        return f"LinearSegment(start={self.start_point}, end={self.end_point}, width={self.width})"
+
     def plot(self, board: pcbnew.BOARD, offset: Optional[Tuple[float, float]] = None):
         """Plot the track on the board."""
         if offset is None:
@@ -198,6 +204,9 @@ class ArcSegment(TraceSegment):
         self.end_angle = self._calculate_end_angle()
         self._arc_length = self._calculate_arc_length()
     
+    def __str__(self):
+        return f"ArcSegment(start={self.start_point}, mid={self.mid_point}, end={self.end_point}, centre={self.center}, radius={self.radius}, start_angle={self.start_angle}, end_angle={self.end_angle}, arc_length={self._arc_length}, width={self.width})"
+
     def plot(self, board: pcbnew.BOARD, offset: Optional[Tuple[float, float]] = None):
         """Plot the track on the board."""
         if offset is None:
