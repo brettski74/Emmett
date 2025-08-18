@@ -2,7 +2,7 @@
 
 Welcome to the Emmett Element Router - a comprehensive helper for routing heating element traces.
 
-## Features
+# Features
 
 - Supports single-sided Aluminium PCB layouts.
 - Includes DIY thermal fuse in the layout for safety.
@@ -13,14 +13,14 @@ Welcome to the Emmett Element Router - a comprehensive helper for routing heatin
 - Opens a dialog for entering heating element design parameters
 - Allowance for process variability in copper thickness and minimum clearances.
 
-## Requirements
+# Requirements
 
 - KiCad 9.0 or later
 - Python 3.6+ (included with KiCad)
 
 **NOTE: This plugin is built using the Python SWIG API for KiCad which has been deprecated by the KiCad development team. Support for the SWIG API may be removed in KiCad 10 or a later version of KiCad, at which time this plugin will cease to work as it is currently written.**
 
-## Installing Emmett
+# Installing Emmett
 
 1. Download the release ZIP file (eg. emmett-1.0.0.zip)
 2. Open KiCad
@@ -30,7 +30,7 @@ Welcome to the Emmett Element Router - a comprehensive helper for routing heatin
 
 You should now see Emmet show up among your installed plugins. When you open KiCad, you should see a new button on the tool bar for launching the Emmett dialog.
 
-## Using Emmett
+# Using Emmett
 
 Emmett is designed to work with purpose-designed PCB layouts for heating elements. The current version only supports a single layout algorithm for an aluminium hotplate design of mine. It includes a thermal fuse which you must create on the manufactured boards for them to work and has surface mount pads for power connection. The fuse link and power connections must be soldered in place using a higher temperature solder alloy. Despite the presence of the thermal fuse and the use of higher temperature solder alloys, there is a risk that your live power connections reflow and the cables become loose. This may pose a risk of fire or equipment damage.
 
@@ -45,19 +45,19 @@ Click the Emmett button on the toolbar to launch Emmett.
 
 When you first open Emmett, he will analyze the currently open PCB layout to deduce some parameter values from it. On the *Technical* tab, you set most of the relevant design parameters for creating your hotplate.
 
-### Electrical Specifications
+## Electrical Specifications
 
 The most likely parameters you may wish to change are the voltage and power capabilities of your power supply. These will determine the ideal resistance of the heating element on your hotplate. The *Target Resistance* will normally be calculated based on the voltage and power you provide, but you can manually enter a value if you desire.
 
 The *Cold Current* value shows how much current will be required at ambient temperature to produce the required power in your heating element. This can give you some idea of how current constrained the design may be at low temperatures.
 
-####Specifying Voltage and Power
+### Specifying Voltage and Power
 
 Power applied to the hotplate is what matters most for achieving certain temperatures and rates of heating. You should let the thermal specifications guide the power requirements for your hotplate. If you have power to burn, you can increase the power and power margin to your heart's content, but excessive power won't really help that much. Depending on your control strategy, extremely excessive power could pose controllability problems.
 
 Voltage is a different matter. The following advice assumes that your power supply has some way of limiting the current to safe levels regardless of the load of the current voltage and current set points. If you're power constrained, then your best bet is to specify the maximum voltage that your power supply can handle. The heating element resistance will increase with temperature. Because of this, you will be current constrained at low temperatures and voltage constrained at high temperatures. You want to take advantage of the maximum power into your hotplate at reflow temperatures because that is where the effects of thermal leakage to the ambient will be the highest and therefore you'll need the most power there to keep increasing temperature. If you are not power constrained and have the ability to vary the voltage applied to the hotplate, you may want to select a lower operating voltage. The *Cold Current* field will show the current required to reach your design power when the hotplate is at ambient temperature. Ideally you would select an operating voltage that produces a cold current value that is within the current output limits of your power supply.
 
-### Thermal Specifications
+## Thermal Specifications
 
 The *Thermal Specifications* can also be tailored to your needs. All of the parameters in this section ultimately affect how much power we assume will be needed by your hotplate design to perform.
 
@@ -67,7 +67,7 @@ For standard tin-lead solders that melt at around 183°C, the standard temperatu
 
 *Power Margin* is a somewhat arbitrary factor relating how much power you need to hold the hotplate at it's maximum temperature versus how much power is available to drive the hotplate. To heat the hotplate and its load up quickly, you need substantially more than just the holding power. A power margin of 100% is recommended. This basically sets the power requirement for your hotplate to double the holding power (ie. the holding power + 100% of the holding power on top of that). Values below about 25% may be sluggish and may struggle to reach the desired reflow temperatures in the available time unless you modify your reflow profiles to be much longer than are typical. Even at a power margin of 25-30% you may need to increase the length of your profile by 50-100% in order to give the hotplate long enough to heat up to the required temperatures to form good solder joints. 100% is a good target that should allow your hotplate to reach reflow temperatures in times comparable to standard reflow profiles.
 
-### Track Specifications
+## Track Specifications
 
 *Minimum Spacing* sets the minimum distance between the adjacent edges of adjacent tracks - ie. the width of the non-conductive space between adjacent tracks. 0.2mm is a fairly safe and conservative value that should work for most PCB manufacturers. There's probably no need to go smaller.
 
@@ -77,7 +77,7 @@ For standard tin-lead solders that melt at around 183°C, the standard temperatu
 
 ![Emmett Calculations Tab](doc/emmett-calculations-tab.png)
 
-### Track Geometry
+## Track Geometry
 
 *Track Width* is the width in millimetres of the tracks that will be created for your heating element. Narrower tracks produce higher resistances. Wider tracks produce lower resistances. Ideally, you would allow the form to calculate the optimal value for this for you based on the thermal and electrical specifications you've provided, but if you want, you can manually enter a value here instead. You do you!
 
@@ -85,17 +85,17 @@ For standard tin-lead solders that melt at around 183°C, the standard temperatu
 
 *Track Pitch* is the centre to centre measurement for adjacent tracks. Track pitch is what determines how many tracks can fit within a given width on the board. It is the sum of the track width and track spacing.
 
-###Board Extents
+## Board Extents
 
 The *Left*, *Top*, *Right* and *Bottom* values show the position of the edges of the board as defined by the edge cuts layer on your PCB. This is determined during board analysis and the values are read-only.
 
 *Width* and *Height* show the width and height of the layout in millimetres. This is again derived from the edge cuts layer. Width is the difference of the right and left values. Height is the difference of the bottom and top values. They are editable, but changes to these values have no effect unless you click the *Resize* button. If you wish to change the size of your hotplate, you can modify the width and height values here and then click the *Resize* button. You should see the edge cuts and mounting holes move to create a layout with your new dimensions. Doing this will also automatically trigger a re-analysis of the board layout but will not trigger regeneration of the heating element tracks.
 
-###Electrical
+## Electrical
 
 This shows the calculated values of the heating element resistance at ambient temperature (ie. *Cold Resistance*) and at the maximum operating temperature (ie. *Hot Resistance*). These are calculated during board analysis and after generation of new tracks.
 
-###Buttons
+## Buttons
 
 *Load* Not currently implemented. The intention was to save the parameters to a file that could be loaded again later, but board analysis seems to make this moot. i may remove these buttons in a future version. For the moment, this does nothing when clicked.
 
@@ -111,7 +111,7 @@ This shows the calculated values of the heating element resistance at ambient te
 
 *Close* Closes the form.
 
-## Building the Plugin
+# Building the Plugin
 
 ```bash
 cd src
@@ -120,14 +120,14 @@ make package
 
 This creates `emmett-<version>.zip` in the build directory. You can then install this using the *Install from File...* option in KiCad's Plugin and Content Manager.
 
-## Troubleshooting
+# Troubleshooting
 
 TBA...
 
-## License
+# License
 
-See [LICENCE.md}(./LICENCE.md) for details.
+See [LICENCE.md](./LICENCE.md) for details.
 
-## Contributing
+# Contributing
 
 No real guidelines as of yet, but if you have any suggestions or find any bugs feel free to create an issue against this project. Maybe take a look at existing issues to see if it's already been reported/suggested first. Also feel free to send me pull requests. I can't guarantee that I'll accept them, but they are welcome.
