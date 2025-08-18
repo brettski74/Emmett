@@ -5,6 +5,8 @@ from math import sqrt
 
 import pcbnew
 
+from typing import Optional
+
 from .emmett_dialog import EmmettDialog
 from .board_builder import BoardBuilder
 from .board_analyzer import BoardAnalyzer
@@ -82,7 +84,10 @@ class EmmettForm(EmmettDialog):
     def click_clear_button(self, event):
         self.builder.clear_tracks()
 
-    def derive_thermal_electrical(self):
+    def derive_thermal_electrical(self, board_text: Optional[dict] = None):
+        if board_text is None:
+            board_text = {}
+
         width = float(self.extent_width.GetValue())
         height = float(self.extent_height.GetValue())
         area = width * height
@@ -92,35 +97,51 @@ class EmmettForm(EmmettDialog):
         # And GPT5's comment that making the hotplate twice as big (ie. 4 times the area) will scale the thermal resistance
         # down by a factor of about 1/3.36. I then extrapolated that into the power formula below.
         # It may or may not work well. We would need more empirical data to be sure or maybe a Phd in physics of heat flow.
-        thermal_resistance = 2.8 * (10000/area) ** 0.874230616502018
-        self.thermal_resistance_value = fset(self.thermal_resistance, thermal_resistance)
+        if "Thermal Resistance" in board_text:
+            self.thermal_resistance.ChangeValue(board_text["Thermal Resistance"])
+            self.thermal_resistance_value = board_text["Thermal Resistance"]
+            thermal_resistance = float(board_text["Thermal Resistance"])
+        else:
+            thermal_resistance = 2.8 * (10000/area) ** 0.874230616502018
+            self.thermal_resistance_value = fset(self.thermal_resistance, thermal_resistance)
 
         # If power is set, then use that and calculate the power margin, otherwise calcualte required power based on the power margin
-        if self.heater_power.GetValue() != "":
-            power = float(self.heater_power.GetValue())
-            margin = self.calculate_power_margin(power)
-            self.power_margin_value = fset(self.power_margin, round(margin, 2))
+        if "Power Margin" in board_text:
+            self.power_margin.ChangeValue(board_text["Power Margin"])
+            self.power_margin_value = board_text["Power Margin"]
+            margin = float(board_text["Power Margin"])
         else:
-            # If there's no power margin, either, then default to 100%
-            margin = float(self.power_margin.GetValue() or 100)
+            margin = float(self.power_margin.GetValue() or 0)
+
+        if "Power" in board_text:
+            self.heater_power.ChangeValue(board_text["Power"])
+            self.heater_power_value = board_text["Power"]
+            power = float(board_text["Power"])
+        elif self.heater_power.GetValue() != "":
+            power = float(self.heater_power.GetValue())
+            
+        if "Voltage" in board_text:
+            self.heater_voltage.ChangeValue(board_text["Voltage"])
+            self.heater_voltage_value = board_text["Voltage"]
+            voltage = float(board_text["Voltage"])
+        elif self.heater_voltage.GetValue() != "":
+            voltage = float(self.heater_voltage.GetValue() or 0)
+
+        if margin <= 0:
+            if power > 0:
+                margin = self.calculate_power_margin(power)
+                self.power_margin_value = fset(self.power_margin, round(margin, 2))
+            else:
+                margin = 100
+                self.power_margin_value = fset(self.power_margin, margin)
+
+        if power <= 0:
             power = self.calculate_margin_power(margin)
             self.heater_power_value = fset(self.heater_power, round(power, 2))
 
-        # If we have been given the operating voltage, then calculate the target resistance
-        if self.heater_voltage.GetValue() != "":
-            voltage = float(self.heater_voltage.GetValue())
-            target_resistance = voltage * voltage / power
-            self.target_resistance_value = fset(self.target_resistance, target_resistance)
-        else:
-            if self.target_resistance.GetValue() == "" and self.hot_resistance.GetValue() != "":
-                self.target_resistance.ChangeValue(self.hot_resistance.GetValue())
-                self.target_resistance_value = self.target_resistance.GetValue()
-
-            # If we have been given the target resistance, then calculate the operating voltage
-            if self.target_resistance.GetValue() != "":
-                target_resistance = fget(self.target_resistance)
-                voltage = round(sqrt(target_resistance * power), 2)
-                self.heater_voltage_value = fset(self.heater_voltage, voltage)
+        if voltage <= 0:
+            voltage = round(sqrt(power * thermal_resistance), 2)
+            self.heater_voltage_value = fset(self.heater_voltage, voltage)
 
         self.calculate_cold_current()
 
@@ -228,7 +249,16 @@ class EmmettForm(EmmettDialog):
             self.extent_width_value = fset(self.extent_width, right - left)
             self.extent_height_value = fset(self.extent_height, bottom - top)
 
-            thickness = float(fdefault(self.track_thickness, 35)) * 1e-6
+            board_text = self.analyzer.parse_board_text()
+
+            if "Track Thickness" in board_text:
+                self.track_thickness.ChangeValue(board_text["Track Thickness"])
+                self.track_thickness_value = board_text["Track Thickness"]
+                thickness = float(board_text["Track Thickness"]) * 1e-6
+            else:
+                self.track_thickness_value = fdefault(self.track_thickness, 35)
+                thickness = float(self.track_thickness_value) * 1e-6
+
             resistivity = 1.68e-8
 
             factory = TraceSegmentFactory()
@@ -237,22 +267,51 @@ class EmmettForm(EmmettDialog):
 
             tracks = self.analyzer.extract_trace_segments(factory, layer_name = "F.Cu")
 
-            if len(tracks) > 0:
-                debug(f"router.spacing: {self.router.spacing}, router.width: {self.router.width}")
-                self.track_pitch_value = fset(self.track_pitch, (self.router.width + self.router.spacing) / 1000, True)
-                self.track_spacing_value = fset(self.track_spacing, self.router.spacing / 1000, True)
-                self.track_width_value = fset(self.track_width, self.router.width / 1000, True)
-                self.track_order = 0x123
+            if "Track Pitch" in board_text:
+                self.track_pitch.ChangeValue(board_text["Track Pitch"])
+                self.track_pitch_value = board_text["Track Pitch"]
+            elif len(tracks) > 0:
+                self.track_pitch_value = fset(self.track_pitch, (self.router.width + self.router.spacing) / 1000)
+            
+            if "Track Spacing" in board_text:
+                self.track_spacing.ChangeValue(board_text["Track Spacing"])
+                self.track_spacing_value = board_text["Track Spacing"]
+            elif len(tracks) > 0:
+                self.track_spacing_value = fset(self.track_spacing, self.router.spacing / 1000)
+            
+            if "Track Width" in board_text:
+                self.track_width.ChangeValue(board_text["Track Width"])
+                self.track_width_value = board_text["Track Width"]
+            elif len(tracks) > 0:
+                self.track_width_value = fset(self.track_width, self.router.width / 1000)
 
-            cold = fdefault(self.ambient_temperature, 25)
-            self.ambient_temperature_value = self.ambient_temperature.GetValue()
-            hot = fdefault(self.maximum_temperature, 220)
-            self.maximum_temperature_value = self.maximum_temperature.GetValue()
+            self.track_order = 0x123
 
-            fset(self.cold_resistance, factory.calculate_total_resistance(tracks, float(cold)))
-            fset(self.hot_resistance, factory.calculate_total_resistance(tracks, float(hot)))
+            if "Ambient Temperature" in board_text:
+                self.ambient_temperature.ChangeValue(board_text["Ambient Temperature"])
+                self.ambient_temperature_value = board_text["Ambient Temperature"]
+            else:
+                self.ambient_temperature_value = fdefault(self.ambient_temperature, 25)
 
-            self.derive_thermal_electrical()
+            if "Maximum Temperature" in board_text:
+                self.maximum_temperature.ChangeValue(board_text["Maximum Temperature"])
+                self.maximum_temperature_value = board_text["Maximum Temperature"]
+            else:
+                self.maximum_temperature_value = fdefault(self.maximum_temperature, 220)
+
+            if "Cold Resistance" in board_text:
+                self.cold_resistance.ChangeValue(board_text["Cold Resistance"])
+            else:
+                fset(self.cold_resistance, factory.calculate_total_resistance(tracks, float(self.ambient_temperature_value)))
+            
+            if "Hot Resistance" in board_text:
+                self.hot_resistance.ChangeValue(board_text["Hot Resistance"])
+                self.target_resistance.ChangeValue(board_text["Hot Resistance"])
+                self.target_resistance_value = board_text["Hot Resistance"]
+            else:
+                fset(self.hot_resistance, factory.calculate_total_resistance(tracks, float(self.maximum_temperature_value)))
+
+            self.derive_thermal_electrical(board_text)
 
             self.m_main_notebook.ChangeSelection(1)
             self.m_calculationPanel.SetFocus()

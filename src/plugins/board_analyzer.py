@@ -10,6 +10,7 @@ Measurements are returned in metres.
 from math import fabs
 import wx
 import pcbnew
+import re
 from typing import List, Tuple, Optional, Union
 from .trace_segment_factory import TraceSegmentFactory, TraceSegment, LinearSegment, ArcSegment
 from .pad_defs import RectangularPad, CircularPad
@@ -18,6 +19,7 @@ from .my_debug import debug, stringify, enable_debug, stringify
 
 KICAD_UNITS = 1e-9
 KICAD_MM = 1e-6
+
 
 class BoardAnalyzer:
     """
@@ -43,6 +45,33 @@ class BoardAnalyzer:
     def _error_msg(self, msg):
         wx.MessageBox(msg, "Emmett Error", wx.OK | wx.ICON_ERROR, self.parent)
     
+    def find_text_element(self, prefix: str) -> pcbnew.PCB_TEXT:
+        """
+        Find the first text element on the board with text content starting with the specified prefix.
+        """
+        drawings = self.board.GetDrawings()
+        for d in drawings:
+            if isinstance(d, pcbnew.PCB_TEXT):
+                if d.GetText().startswith(prefix):
+                    return d
+        return None
+
+    def parse_board_text(self) -> dict:
+        result = {}
+
+        r = re.compile(r"^([\w ]+): ([\d.]+).*(\n|$)")
+
+        drawings = self.board.GetDrawings()
+        for drawing in drawings:
+            if isinstance(drawing, pcbnew.PCB_TEXT):
+                txt = drawing.GetText()
+
+                while m := r.match(txt):
+                    result[m.group(1)] = m.group(2)
+                    txt = r.sub("", txt)
+
+        return result
+
     def get_extents(self, units: float = KICAD_UNITS) -> Tuple[float, float, float, float]:
         """
         Get the extents of the board.

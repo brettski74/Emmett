@@ -2,6 +2,7 @@ import os
 import pcbnew
 import wx
 import traceback
+from datetime import datetime
 
 from .trace_segment_factory import TraceSegmentFactory
 from .board_builder import BoardBuilder
@@ -84,29 +85,22 @@ class EmmettAction( pcbnew.ActionPlugin ):
             router.spacing = float(form.track_spacing_value) * 1e3
             tracks = router.update_board(builder)
 
-            # Calculate temperature-compensated resistances
-            resistance_20c = factory.calculate_total_resistance(tracks, temperature_celsius=20)
-            resistance_220c = factory.calculate_total_resistance(tracks, temperature_celsius=220)
+            cold_resistance = factory.calculate_total_resistance(tracks, float(form.ambient_temperature.GetValue()))
+            hot_resistance = factory.calculate_total_resistance(tracks, float(form.maximum_temperature.GetValue()))
+
+            analyzer = form.analyzer
+            text = analyzer.find_text_element("Cold Resistance: ")
+            if text is not None:
+                text.SetText(f"Cold Resistance: {cold_resistance:.3f}Ω\nHot Resistance: {hot_resistance:.3f}Ω\nVoltage: {form.heater_voltage.GetValue()}V\nPower: {form.heater_power.GetValue()}W\n\nGenerated: {datetime.now().strftime('%Y%m%d-%H%M%S')}")
             
-            # Format the resistance values with appropriate units
-            def format_resistance(resistance):
-                if resistance >= 10.0:
-                    return f"{resistance:.3f} Ω"
-                else:
-                    # Convert to milliohms for values less than 10 ohms
-                    resistance_milliohms = resistance * 1000
-                    return f"{resistance_milliohms:.1f} mΩ"
-            
-            resistance_20c_text = format_resistance(resistance_20c)
-            resistance_220c_text = format_resistance(resistance_220c)
-            
-            # Create detailed message with temperature information
-            message = f"Trace resistance analysis:\n\n"
-            message += f"At 20°C (room temperature): {resistance_20c_text}\n"
-            message += f"At 220°C (operating temperature): {resistance_220c_text}\n\n"
-            
-            self._info_msg(message)
-            
+            text = analyzer.find_text_element("Maximum Temperature: ")
+            if text is not None:
+                text.SetText(f"Maximum Temperature: {form.maximum_temperature.GetValue()}°C\nAmbient Temperature: {form.ambient_temperature.GetValue()}°C\nThermal Resistance: {form.thermal_resistance.GetValue()}K/W\nPower Margin: {form.power_margin.GetValue()}%")
+
+            text = analyzer.find_text_element("Track Width: ")
+            if text is not None:
+                text.SetText(f"Track Width: {form.track_width.GetValue()}mm\nTrack Spacing: {form.track_spacing.GetValue()}mm\nTrack Pitch: {form.track_pitch.GetValue()}mm\nWidth: {form.extent_width.GetValue()}mm\nHeight: {form.extent_height.GetValue()}mm")
+
         except Exception as e:
             msg = f"Error doing the shit you asked on this board: {e}"
             msg += f"\n{traceback.format_exc()}"
