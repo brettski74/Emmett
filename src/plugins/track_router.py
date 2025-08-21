@@ -5,21 +5,25 @@ This module provides an abstract base class for different track routing algorith
 along with utility methods for common trace patterns like serpentine traces.
 """
 
-from math import ceil, floor
+from math import ceil, floor, sqrt, fabs
 
 import pcbnew
 
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Optional
-from math import sqrt
 
 from .board_analyzer import BoardAnalyzer
 from .board_builder import BoardBuilder
 from .trace_segment_factory import TraceSegmentFactory, TraceSegment
 from .vector_utils import add_vec, sub_vec, scale_vec, shrink_vec, normalize_vec, perp_vec, invert_vec, x_mirror_vec, y_mirror_vec
+from .my_debug import debug, enable_debug
+
+enable_debug()
 
 MICRONS_TO_M = 1e-6
 MICRONS_TO_MM = 1e-3
+TOLERANCE = 0.00005
+
 
 def mm(microns):
     if isinstance(microns, tuple):
@@ -57,7 +61,15 @@ class TrackRouter(ABC):
         """
         self.factory = factory
         self.log = ""
+
+        self.width = 1000
+        self.spacing = 200
+        self.margin = 500
+        self.update_derived_parameters()
     
+    def update_derived_parameters(self):
+        self.pitch = self.width + self.spacing
+
     @abstractmethod
     def analyze_board(self, analyzer: BoardAnalyzer):
         """
@@ -79,6 +91,13 @@ class TrackRouter(ABC):
         """
         pass
     
+    @abstractmethod
+    def starting_track_count(self) -> Tuple[int, float]:
+        """
+        Get the minimum number of tracks that is even and wider than the specified distance.
+        """
+        pass
+
     @abstractmethod
     def update_board(self, builder: BoardBuilder) -> List[TraceSegment]:
         """
@@ -205,4 +224,152 @@ class TrackRouter(ABC):
             count -= 1
 
         return result
+
+    def optimize_tracks(self, minimum_spacing: float, target_resistance: float, target_temperature: float):
+        """
+        This algorithm should work for any track routing algorithm that has a track count limited by
+        the number of tracks that can fit across the width of the board.
+
+        Track resistance generally varies with track width, but creating a formula that easily relates
+        track width to resistance for a given routing algorithm can be challenging. Instead, we can find
+        the track pitch that corresponds to a given number of tracks across the board width. Using the
+        minimum spacing, we can determine the minimum resistance for a given track count. The algorithm
+        assumes that track counts must either all be even or all be odd. The even-ness or odd-ness of
+        track counts is determined by the starting_track_count method. The track count is then incremented
+        by 2 until to find the largest track count that produces a minimum resistance that is still less
+        than the target resistance. Using the corresponding track pitch, we then reduce the track width
+        until the resistance matches the target resistance.
+
+        While it is true that total track resistance is roughly inversely proportional to track width,
+        the effect of non-uniform current distribution around tight turns means that it's not exact.
+        While it may seem tempting to use this to more quickly converge on the target resistance, there
+        is the possibility that some parameter values could lead to non-terminating search when using
+        this approach. Therefore, we use a safer bracketed search approach which might take more iterations
+        but is guaranteed to converge on a value.
+
+        Returns a two-element tuple containing the track width and track spacing in microns
+        """
+        # Save the current state in case we fail and want to roll back
+        save_pitch = self.pitch
+        save_width = self.width
+        save_spacing = self.spacing
+
+        self.spacing = minimum_spacing
+        track_count, working_width = self.starting_track_count()
+        debug(f"starting track count: {track_count}, working width: {working_width}, minimum spacing: {minimum_spacing}")
+
+        resistance = 0
+        last_tracks = None
+        rlo = 0
+
+        while resistance < target_resistance:
+            self.pitch = working_width / track_count
+            self.width = self.pitch - self.spacing
+
+            tracks = self.generate_tracks()
+            resistance = self.factory.calculate_total_resistance(tracks, target_temperature)
+            debug(f"track_count: {track_count}, pitch: {self.pitch}, width: {self.width}, resistance: {resistance}")
+
+            if resistance > target_resistance:
+                track_count = track_count - 2
+                tracks = last_tracks
+                break
+
+            wlo = self.width
+            rlo = resistance
+            last_tracks = tracks
+            track_count = track_count + 2
+
+        if resistance == 0:
+            self.pitch = save_pitch
+            self.width = save_width
+            self.spacing = save_spacing
+            raise ValueError(f"No track pitch < 2.5mm found for target resistance of {target_resistance} ohms")
+
+        if rlo == 0:
+            self.pitch = save_pitch
+            self.width = save_width
+            self.spacing = save_spacing
+            raise ValueError(f"No high bracket found for target resistance of {target_resistance} ohms")
+
+        resistance = self.finish_optimization(target_resistance, target_temperature, working_width/track_count - 10, minimum_spacing)
+        pitch = self.pitch
+        width = self.width
+        error = fabs(resistance - target_resistance)
+        debug(f"count: {track_count}, width: {width}, resistance: {resistance}, error: {error}")
+
+        # Sometimes we struggle to get close enough to the target resistance at the highest possible track count, so try a
+        # a couple of lower counts to see if we can get closer.
+        track_count -= 2
+        r2 = self.finish_optimization(target_resistance, target_temperature, working_width/track_count - 10, minimum_spacing)
+        err2 = fabs(r2 - target_resistance)
+        debug(f"count: {track_count}, width: {width}, resistance: {r2}, error: {err2}")
+        if err2 < error:
+            pitch = self.pitch
+            width = self.width
+            resistance = r2
+            error = err2
+        debug(f"width: {width}, resistance: {resistance}, error: {error}")
+
+        track_count -= 2
+        r2 = self.finish_optimization(target_resistance, target_temperature, working_width/track_count - 10, minimum_spacing)
+        debug(f"count: {track_count}, width: {width}, resistance: {r2}, error: {err2}")
+        if fabs(r2 - target_resistance) < (resistance - target_resistance):
+            pitch = self.pitch
+            width = self.width
+            resistance = r2
+            error = err2
+        debug(f"width: {width}, resistance: {resistance}, error: {error}")
+
+        self.pitch = pitch
+        self.width = width
+        self.spacing = self.pitch - self.width
+
+        return resistance
+
+    def finish_optimization(self, target_resistance, temperature, pitch, minimum_spacing):
+        global TOLERANCE
+        depth = 100
+
+        self.pitch = pitch
+        self.spacing = minimum_spacing
+        self.width = self.pitch - self.spacing
+
+        tracks = self.generate_tracks()
+        rlo = self.factory.calculate_total_resistance(tracks, temperature)
+        wlo = self.width
+        whi = 0
+        rhi = 0
+
+        while depth > 0 and fabs(rlo - rhi) > TOLERANCE and fabs(wlo - whi) > TOLERANCE:
+            depth = depth - 1
+
+            self.width = (whi + wlo) / 2
+            self.spacing = self.pitch - self.width
+
+            tracks = self.generate_tracks()
+            resistance = self.factory.calculate_total_resistance(tracks, temperature)
+            debug(f"depth: {depth}, width: {self.width}, resistance: {resistance}")
+
+            if resistance > target_resistance:
+                rhi = resistance
+                whi = self.width
+            else:
+                rlo = resistance
+                wlo = self.width
+
+        if depth <= 0:
+            raise ValueError(f"Target resistance of {target_resistance} ohms not achievable with pitch of {pitch} and minimum spacing of {minimum_spacing}")
+
+        # Pick whichever side of the bracket is closer to the target resistance
+        if fabs(rlo - target_resistance) < fabs(rhi - target_resistance):
+            self.width = wlo
+            resistance = rlo
+        else:
+            self.width = whi
+            resistance = rhi
+
+        self.spacing = self.pitch - self.width
+
+        return resistance
 

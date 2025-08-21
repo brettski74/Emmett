@@ -195,8 +195,6 @@ class LinearSegment(TraceSegment):
         end = scale_vec(add_vec(self.end_point, offset), KICAD_MM)
         w = self.width * KICAD_MM
 
-        #wx.MessageBox(f"Plotting linear segment from {start} to {end} with width {w}", "Emmett", wx.OK | wx.ICON_INFORMATION)
-
         track = pcbnew.PCB_TRACK(board)
         track.SetStart(pcbnew.VECTOR2I_MM(start[0], start[1]))
         track.SetEnd(pcbnew.VECTOR2I_MM(end[0], end[1]))

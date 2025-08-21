@@ -20,6 +20,8 @@ from .board_analyzer import BoardAnalyzer
 from .board_builder import BoardBuilder
 from .my_debug import debug, enable_debug
 
+enable_debug()
+
 KICAD_MICRONS = 1e-3
 
 class AlTrackRouter(TrackRouter):
@@ -31,28 +33,24 @@ class AlTrackRouter(TrackRouter):
     """
 
     def __init__(self, factory: TraceSegmentFactory):
-        super().__init__(factory)
-        # Some sane defaults
-        self.width = 1000
-        self.spacing = 200
-        self.margin = 500
-
         # Don't set board extents until we've analyzed the board
         self.top = 0
         self.bottom = 0
         self.left = 0
         self.right = 0
 
-        #self.fuse = (RectangularPad(150000,79500,5000,6000,250), RectangularPad(150000,100500,5000,6000,250))
-        self.fuse = None
-        #self.connections = (RectangularPad(143000,43500,4000,6000,300), RectangularPad(157000,43500,4000,6000,300))
-        self.connections = None
-        #self.holes = (CircularPad(104000,44000,4500,500), CircularPad(196000,44000,4500,500), CircularPad(104000,136000,4500,500), CircularPad(196000,136000,4500,500))
-        self.holes = None
-        self.parent = None
+        super().__init__(factory)
+        # Some sane defaults
+        self.width = 1000
+        self.spacing = 200
+        self.margin = 500
 
-    def _update_derived_parameters(self):
-        self.pitch = self.width + self.spacing
+        self.fuse = None
+        self.connections = None
+        self.holes = None
+
+    def update_derived_parameters(self):
+        super().update_derived_parameters()
         self.ystart = self.top + self.margin + self.pitch + self.width + self.spacing/2
         self.yend = self.bottom - self.margin - self.pitch
 
@@ -156,7 +154,7 @@ class AlTrackRouter(TrackRouter):
             analyzer.get_closest_hole((right, bottom), KICAD_MICRONS)
         )
 
-        self._update_derived_parameters()
+        self.update_derived_parameters()
 
     def update_board(self, builder: BoardBuilder) -> List[TraceSegment]:
         """
@@ -184,9 +182,6 @@ class AlTrackRouter(TrackRouter):
         pcbnew.Refresh()
 
         return tracks
-
-    def _info_msg(self, msg):
-        wx.MessageBox(msg, "Emmett", wx.OK | wx.ICON_INFORMATION, self.parent)
 
     def generate_fuse_in_tracks(self) -> List[TraceSegment]:
         """
@@ -314,7 +309,6 @@ class AlTrackRouter(TrackRouter):
             -1
         )
 
-        #tracks.append(self.corner_90(add_vec(tracks[-1].end_point, (-pitch/2, pitch/2)), tracks[-1].end_point))
         tracks.append(self.factory.create_linear_segment(
             scale_vec(((self.fuse_left - self.pitch/2), (self.fuse[0].clear_bottom() + self.width/2)), 1e-6),
             scale_vec(((self.fuse_right - 1.5*self.pitch - spacing_adjust/2), (self.fuse[0].clear_bottom() + self.width/2)), 1e-6),
@@ -458,7 +452,7 @@ class AlTrackRouter(TrackRouter):
         Returns:
             List of TraceSegment objects forming heating element.
         """
-        self._update_derived_parameters()
+        self.update_derived_parameters()
 
         self.total_count = self.even_tracks_under(self.right - self.left - 2*self.margin + self.spacing, self.pitch)
         self.fuse_count = self.odd_tracks_over(self.fuse[0].clear_width(), self.pitch)
@@ -472,8 +466,6 @@ class AlTrackRouter(TrackRouter):
             self.fuse[0].x = (self.left + self.right - self.pitch) / 2
 
         self.right_count = self.total_count - self.left_count - self.fuse_count
-
-        #wx.MessageBox(f"total_count: {self.total_count}, fuse_count: {self.fuse_count}, left_count: {self.left_count}, right_count: {self.right_count}")
 
         self.fuse_left = self.fuse[0].x - (self.fuse_count-1)*self.pitch/2
         self.fuse_right = self.fuse[0].x + (self.fuse_count-1)*self.pitch/2
@@ -566,85 +558,10 @@ class AlTrackRouter(TrackRouter):
         inl.move_end((0, offset))
         out.move_start((0, offset))
 
-    def optimize_tracks(self, minimum_spacing: float, target_resistance: float, target_temperature: float):
-        """
-        For a fixed track spacing and varying track width, the track resistance varies fairly
-        continuously until the track width changes enough that the number of serpentine tracks that
-        fit across the face of the board increases. When this happens, there is a large, discontinuous
-        jump in the track resistance versus track width. These discontinuities present a problem
-        for optimization. To avoid this, we want to search within a continuous range.
-
-        The way we do this is to find the track pitch required for each even number of tracks across
-        the width of the board. We calculate the resistance for this track pitch with the minimum
-        spacing. We keep increasing the number of tracks across the board width by 2 until we find
-        the smallest track pitch that still produces a resistance that is lower than the target
-        resistance. Once we have that, we hold the track pitch constant and increase the track
-        spacing until the resistance matches the target resistance, within a reasonable tolerance.
-
-        Returns a two-element tuple containing the track width and track spacing in microns
-        """
-        # Save the current state in case we fail and want to roll back
-        save_pitch = self.pitch
-        save_width = self.width
-        save_spacing = self.spacing
-
+    def starting_track_count(self) -> int:
         # Assume that we're never going to have track widths greater than 2.5mm
         # The -10 on the end is a hedge against rounding errors - hopefully enough!
         working_width = self.right - self.left - 2*self.margin + self.spacing - 10
-        track_count = 2 * floor(working_width / 5000)
-        self.spacing = minimum_spacing
+        debug(f"working width: {working_width}, left: {self.left}, right: {self.right}, margin: {self.margin}, spacing: {self.spacing}")
+        return (2 * floor(working_width / 5000), working_width)
 
-        resistance = 0
-        last_resistance = 0
-        last_tracks = None
-
-        while resistance < target_resistance:
-            self.pitch = working_width / track_count
-            self.width = self.pitch - self.spacing
-
-            tracks = self.generate_tracks()
-            resistance = self.factory.calculate_total_resistance(tracks, target_temperature)
-
-            if resistance > target_resistance:
-                track_count = track_count - 2
-                resistance = last_resistance
-                tracks = last_tracks
-                break
-
-            last_tracks = tracks
-            last_resistance = resistance
-            track_count = track_count + 2
-
-        if resistance == 0:
-            self.pitch = save_pitch
-            self.width = save_width
-            self.spacing = save_spacing
-            raise ValueError(f"No track pitch < 2.5mm found for target resistance of {target_resistance} ohms")
-
-        self.pitch = working_width / track_count
-        self.width = self.pitch - self.spacing
-        
-        depth = 100
-
-        # Assume that track length will be roughly equal for a given track pitch, so track resistance
-        # is roughly inversely proportional to track width = pitch - spacing.
-        # So back-calculate the track width for the resistance we want based on the resistance and
-        # track width we already have and test. Keep repeating until we're within tolerance of our
-        # target resistance (within +/- 0.0005 ohms)
-        # Add the depth check in there to avoid an infinite loop if something unforeseen happens with
-        # the numbers
-        while depth > 0 and fabs(target_resistance - resistance) > 0.000005:
-            depth = depth - 1
-
-            k = resistance * self.width
-            self.width = k / target_resistance
-            self.spacing = self.pitch - self.width
-
-            tracks = self.generate_tracks()
-            resistance = self.factory.calculate_total_resistance(tracks, target_temperature)
-        
-        if depth <= 0:
-            self.pitch = save_pitch
-            self.width = save_width
-            self.spacing = save_spacing
-            raise ValueError(f"No track width/spacing found for target resistance of {target_resistance} ohms")

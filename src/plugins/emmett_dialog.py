@@ -441,19 +441,6 @@ class EmmettDialog ( wx.Dialog ):
 
         bSizer4 = wx.BoxSizer( wx.HORIZONTAL )
 
-        self.load_button = wx.Button( self, wx.ID_ANY, u"Load", wx.DefaultPosition, wx.DefaultSize, 0 )
-        self.load_button.SetToolTip( u"Load parameters from file." )
-
-        bSizer4.Add( self.load_button, 0, wx.ALIGN_BOTTOM|wx.ALIGN_LEFT|wx.ALL, 5 )
-
-        self.save_button = wx.Button( self, wx.ID_ANY, u"Save", wx.DefaultPosition, wx.DefaultSize, 0 )
-        self.save_button.SetToolTip( u"Save the current parameters to a file for later re-use." )
-
-        bSizer4.Add( self.save_button, 0, wx.ALIGN_BOTTOM|wx.ALIGN_LEFT|wx.ALL, 5 )
-
-
-        bSizer4.Add( ( 0, 0), 1, wx.EXPAND, 5 )
-
         self.analyze_button = wx.Button( self, wx.ID_ANY, u"Analyze", wx.DefaultPosition, wx.DefaultSize, 0 )
         self.analyze_button.SetToolTip( u"Analyze the current PCB to derive parameters." )
 
@@ -465,6 +452,21 @@ class EmmettDialog ( wx.Dialog ):
         bSizer4.Add( self.calculate_button, 0, wx.ALL, 5 )
 
 
+        bSizer4.Add( ( 0, 0), 1, wx.EXPAND, 5 )
+
+        self.load_button = wx.Button( self, wx.ID_ANY, u"Load", wx.DefaultPosition, wx.DefaultSize, 0 )
+        self.load_button.Hide()
+        self.load_button.SetToolTip( u"Load parameters from file." )
+
+        bSizer4.Add( self.load_button, 0, wx.ALIGN_BOTTOM|wx.ALIGN_LEFT|wx.ALL, 5 )
+
+        self.save_button = wx.Button( self, wx.ID_ANY, u"Save", wx.DefaultPosition, wx.DefaultSize, 0 )
+        self.save_button.Hide()
+        self.save_button.SetToolTip( u"Save the current parameters to a file for later re-use." )
+
+        bSizer4.Add( self.save_button, 0, wx.ALIGN_BOTTOM|wx.ALIGN_LEFT|wx.ALL, 5 )
+
+
         gSizer1.Add( bSizer4, 0, wx.ALIGN_BOTTOM|wx.ALIGN_LEFT|wx.ALL|wx.EXPAND, 5 )
 
         bSizer41 = wx.BoxSizer( wx.HORIZONTAL )
@@ -474,7 +476,7 @@ class EmmettDialog ( wx.Dialog ):
 
         bSizer41.Add( self.clear_button, 0, wx.ALIGN_BOTTOM|wx.ALIGN_RIGHT|wx.ALL, 5 )
 
-        self.apply_button = wx.Button( self, wx.ID_OK, u"Apply 1.21GW!", wx.DefaultPosition, wx.DefaultSize, 0, wx.DefaultValidator, u"applyButton" )
+        self.apply_button = wx.Button( self, wx.ID_ANY, u"Apply 1.21GW!", wx.DefaultPosition, wx.DefaultSize, 0, wx.DefaultValidator, u"applyButton" )
         self.apply_button.SetToolTip( u"Clear the board and generate new tracks." )
 
         bSizer41.Add( self.apply_button, 0, wx.ALIGN_CENTER|wx.ALIGN_CENTER_HORIZONTAL|wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5 )
@@ -540,10 +542,10 @@ class EmmettDialog ( wx.Dialog ):
         self.track_pitch.Bind( wx.EVT_TEXT, self.track_pitch_change )
         self.track_pitch.Bind( wx.EVT_TEXT_ENTER, self.track_pitch_enter )
         self.resize_button.Bind( wx.EVT_BUTTON, self.click_resize_button )
-        self.load_button.Bind( wx.EVT_BUTTON, self.click_load_button )
-        self.save_button.Bind( wx.EVT_BUTTON, self.click_save_button )
         self.analyze_button.Bind( wx.EVT_BUTTON, self.click_analyze_button )
         self.calculate_button.Bind( wx.EVT_BUTTON, self.click_geometryze_button )
+        self.load_button.Bind( wx.EVT_BUTTON, self.click_load_button )
+        self.save_button.Bind( wx.EVT_BUTTON, self.click_save_button )
         self.clear_button.Bind( wx.EVT_BUTTON, self.click_clear_button )
         self.apply_button.Bind( wx.EVT_BUTTON, self.click_apply_button )
         self.close_button.Bind( wx.EVT_BUTTON, self.click_close_button )
@@ -667,16 +669,16 @@ class EmmettDialog ( wx.Dialog ):
     def click_resize_button( self, event ):
         event.Skip()
 
-    def click_load_button( self, event ):
-        event.Skip()
-
-    def click_save_button( self, event ):
-        event.Skip()
-
     def click_analyze_button( self, event ):
         event.Skip()
 
     def click_geometryze_button( self, event ):
+        event.Skip()
+
+    def click_load_button( self, event ):
+        event.Skip()
+
+    def click_save_button( self, event ):
         event.Skip()
 
     def click_clear_button( self, event ):

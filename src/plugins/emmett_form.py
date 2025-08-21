@@ -1,3 +1,5 @@
+import csv
+from datetime import datetime
 import os
 import traceback
 import wx
@@ -14,6 +16,7 @@ from .trace_segment_factory import TraceSegmentFactory, temperature_adjust_resis
 from .my_debug import debug,enable_debug, stringify
 from .track_router import TrackRouter
 from .al_track_router import AlTrackRouter
+from .gui_utils import info_msg, error_msg, find_parent_window
 
 enable_debug()
 
@@ -61,8 +64,8 @@ def field_normalize(field) -> str:
     return result
 
 class EmmettForm(EmmettDialog):
-    def __init__(self, frame, board: pcbnew.BOARD, builder: BoardBuilder, analyzer: BoardAnalyzer, router: TrackRouter):
-        super().__init__(frame)
+    def __init__(self, board: pcbnew.BOARD, builder: BoardBuilder, analyzer: BoardAnalyzer, router: TrackRouter):
+        super().__init__(find_parent_window())
 
         self.logo_bitmap.SetBitmap(wx.Bitmap(os.path.join(resource_dir(), "emmett-192.png")))
         self.calculation_bitmap.SetBitmap(wx.Bitmap(os.path.join(resource_dir(), "emmett-excited-192.png")))
@@ -76,6 +79,14 @@ class EmmettForm(EmmettDialog):
         self.track_pitch_value = ""
         self.track_order = 0x123
 
+        self.heater_power_value = ""
+        self.heater_voltage_value = ""
+        self.ambient_temperature_value = ""
+        self.maximum_temperature_value = ""
+        self.thermal_resistance_value = ""
+        self.power_margin_value = ""
+        self.target_resistance_value = ""
+
         self.click_analyze_button(None)
 
         self.m_main_notebook.ChangeSelection(0)
@@ -88,16 +99,20 @@ class EmmettForm(EmmettDialog):
         if board_text is None:
             board_text = {}
 
-        width = float(self.extent_width.GetValue())
-        height = float(self.extent_height.GetValue())
+        width = int(self.extent_width.GetValue())
+        height = int(self.extent_height.GetValue())
         area = width * height
+
+        board_width = int(board_text["Board Width"]) if "Board Width" in board_text else 0
+        board_height = int(board_text["Board Height"]) if "Board Height" in board_text else 0
+        board_area = board_width * board_height
 
         # This formula is a guess based on empirical data with 100x100mm hotplates and a conversation with GPT5.
         # It's based on the thermal resistance to ambient of many of my FR4 hotplates being measured in the 2.7-2.9 K/W range
         # And GPT5's comment that making the hotplate twice as big (ie. 4 times the area) will scale the thermal resistance
         # down by a factor of about 1/3.36. I then extrapolated that into the power formula below.
         # It may or may not work well. We would need more empirical data to be sure or maybe a Phd in physics of heat flow.
-        if "Thermal Resistance" in board_text:
+        if "Thermal Resistance" in board_text and board_width > 0 and board_width == width and board_height > 0 and board_height == height:
             self.thermal_resistance.ChangeValue(board_text["Thermal Resistance"])
             self.thermal_resistance_value = board_text["Thermal Resistance"]
             thermal_resistance = float(board_text["Thermal Resistance"])
@@ -126,6 +141,8 @@ class EmmettForm(EmmettDialog):
             voltage = float(board_text["Voltage"])
         elif self.heater_voltage.GetValue() != "":
             voltage = float(self.heater_voltage.GetValue() or 0)
+
+        self.calculate_target_resistance()
 
         if margin <= 0:
             if power > 0:
@@ -165,19 +182,15 @@ class EmmettForm(EmmettDialog):
         dy = int(deltav * 1000)
 
         hole = self.analyzer.get_closest_hole((fget(self.extent_left)*1e6, fget(self.extent_top)*1e6))
-        debug(f"hole: {stringify(hole.footprint)}, delta: ({deltah},{deltav}), dx,dy: ({-dx},{-dy})")
         hole.footprint.Move(pcbnew.VECTOR2I(-dx, -dy))
 
         hole = self.analyzer.get_closest_hole((fget(self.extent_right)*1e6, fget(self.extent_top)*1e6))
-        debug(f"hole: {stringify(hole.footprint)}, delta: ({deltah},{deltav}), dx,dy: ({dx},{-dy})")
         hole.footprint.Move(pcbnew.VECTOR2I(dx, -dy))
 
         hole = self.analyzer.get_closest_hole((fget(self.extent_left)*1e6, fget(self.extent_bottom)*1e6))
-        debug(f"hole: {stringify(hole.footprint)}, delta: ({deltah},{deltav}), dx,dy: ({-dx},{dy})")
         hole.footprint.Move(pcbnew.VECTOR2I(-dx, dy))
 
         hole = self.analyzer.get_closest_hole((fget(self.extent_right)*1e6, fget(self.extent_bottom)*1e6))
-        debug(f"hole: {stringify(hole.footprint)}, delta: ({deltah},{deltav}), dx,dy: ({dx},{dy})")
         hole.footprint.Move(pcbnew.VECTOR2I(dx, dy))
 
         drawings = self.board.GetDrawings()
@@ -199,7 +212,6 @@ class EmmettForm(EmmettDialog):
                                 newx = int(startx + deltah * 1000)
                             else:
                                 newx = int(startx - deltah * 1000)
-                            debug(f"newx: {newx}, start: ({startx},{starty}), end: ({endx},{endy}), delta: ({deltah},{deltav}), centre: ({centre[0]},{centre[1]})")
                             
                             drawing.SetStart(pcbnew.VECTOR2I(newx, int(starty - deltav * 1000)))
                             drawing.SetEnd(pcbnew.VECTOR2I(newx, int(endy + deltav * 1000)))
@@ -212,7 +224,6 @@ class EmmettForm(EmmettDialog):
                                 newy = int(starty + deltav * 1000)
                             else:
                                 newy = int(starty - deltav * 1000)
-                            debug(f"newy: {newy}, start: ({startx},{starty}), end: ({endx},{endy}), delta: ({deltah},{deltav}), centre: ({centre[0]},{centre[1]})")
                             
                             drawing.SetStart(pcbnew.VECTOR2I(int(startx - deltah * 1000), newy))
                             drawing.SetEnd(pcbnew.VECTOR2I(int(endx + deltah * 1000), newy))
@@ -299,6 +310,8 @@ class EmmettForm(EmmettDialog):
             else:
                 self.maximum_temperature_value = fdefault(self.maximum_temperature, 220)
 
+            #self._export_tracks_to_csv(tracks, name = "form_load")
+
             if "Cold Resistance" in board_text:
                 self.cold_resistance.ChangeValue(board_text["Cold Resistance"])
             else:
@@ -306,8 +319,6 @@ class EmmettForm(EmmettDialog):
             
             if "Hot Resistance" in board_text:
                 self.hot_resistance.ChangeValue(board_text["Hot Resistance"])
-                self.target_resistance.ChangeValue(board_text["Hot Resistance"])
-                self.target_resistance_value = board_text["Hot Resistance"]
             else:
                 fset(self.hot_resistance, factory.calculate_total_resistance(tracks, float(self.maximum_temperature_value)))
 
@@ -319,58 +330,7 @@ class EmmettForm(EmmettDialog):
         except Exception as e:
             msg = f"Error analyzing board: {e}"
             msg += f"\n{traceback.format_exc()}"
-            wx.MessageBox(msg, "Emmett Error", wx.OK | wx.ICON_ERROR)
-
-    def old_analyze(self, event):
-        try:
-            # Get the currently loaded board
-            # Create the trace segment factory with default copper parameters
-            factory = TraceSegmentFactory()
-            
-            # Extract trace segments from the board
-            trace_segments = self.analyzer.extract_trace_segments(factory, layer_name = "F.Cu")
-  
-            if not trace_segments:
-                wx.MessageBox("No trace segments found on the board.", "Emmett", wx.OK | wx.ICON_INFORMATION)
-                return
-            
-            # Calculate total resistance
-            total_resistance = factory.calculate_total_resistance(trace_segments)
-            
-            # Calculate temperature-compensated resistances
-            resistance_20c = factory.calculate_total_resistance(trace_segments, temperature_celsius=20)
-            resistance_220c = factory.calculate_total_resistance(trace_segments, temperature_celsius=220)
-            
-            # Format the resistance values with appropriate units
-            def format_resistance(resistance):
-                if resistance >= 10.0:
-                    return f"{resistance:.3f} Ω"
-                else:
-                    # Convert to milliohms for values less than 10 ohms
-                    resistance_milliohms = resistance * 1000
-                    return f"{resistance_milliohms:.1f} mΩ"
-            
-            resistance_20c_text = format_resistance(resistance_20c)
-            resistance_220c_text = format_resistance(resistance_220c)
-            
-            # Get board info for context
-            board_info = self.analyzer.get_board_info()
-            
-            # Create detailed message with temperature information
-            message = f"Trace resistance analysis:\n\n"
-            message += f"At 20°C (room temperature): {resistance_20c_text}\n"
-            message += f"At 220°C (operating temperature): {resistance_220c_text}\n\n"
-            message += f"Board: {board_info['filename']}\n"
-            message += f"Trace segments: {len(trace_segments)}\n"
-            message += f"Copper layers: {board_info['layers']}\n"
-            message += f"Total tracks: {board_info['tracks_count']}"
-            
-            wx.MessageBox(message, "Emmett Element Router", wx.OK | wx.ICON_INFORMATION)
-            
-        except Exception as e:
-            msg = f"Error while opening Emmett form: {e}"
-            msg += f"\n{traceback.format_exc()}"
-            wx.MessageBox(msg, "Emmett Error", wx.OK | wx.ICON_ERROR)
+            error_msg(msg)
 
     def track_width_enter(self, event):
         self.track_width_leave(event)
@@ -586,4 +546,120 @@ class EmmettForm(EmmettDialog):
         except Exception as e:
             msg = f"Error optimizing tracks: {e}"
             msg += f"\n{traceback.format_exc()}"
-            wx.MessageBox(msg, "Emmett Error", wx.OK | wx.ICON_ERROR)
+            error_msg(msg)
+
+    def click_apply_button(self, event):
+        """Handle when user clicks Generate button."""
+        try:
+            self.click_geometryze_button(event)
+
+            debug(f"self.track_width_value: {self.track_width_value}, self.track_spacing_value: {self.track_spacing_value}")
+            builder = self.builder
+            router = self.router
+            factory = router.factory
+            router.width = float(self.track_width_value) * 1e3
+            router.spacing = float(self.track_spacing_value) * 1e3
+            tracks = router.update_board(builder)
+            analyzer = self.analyzer
+
+            #timestamp = self._export_tracks_to_csv(tracks, name = "generated")
+
+            cold_resistance = factory.calculate_total_resistance(tracks, float(self.ambient_temperature_value))
+            hot_resistance = factory.calculate_total_resistance(tracks, float(self.maximum_temperature_value))
+
+            self.cold_resistance.ChangeValue(f"{cold_resistance:.3f}")
+            self.hot_resistance.ChangeValue(f"{hot_resistance:.3f}")
+
+            text = analyzer.find_text_element("Cold Resistance: ")
+            if text is not None:
+                text.SetText(f"Cold Resistance: {cold_resistance:.3f}Ω\nHot Resistance: {hot_resistance:.3f}Ω\nVoltage: {self.heater_voltage.GetValue()}V\nPower: {self.heater_power.GetValue()}W\n\nGenerated: {datetime.now().strftime('%Y%m%d-%H%M%S')}")
+            
+            text = analyzer.find_text_element("Maximum Temperature: ")
+            if text is not None:
+                text.SetText(f"Maximum Temperature: {self.maximum_temperature.GetValue()}°C\nAmbient Temperature: {self.ambient_temperature.GetValue()}°C\nThermal Resistance: {self.thermal_resistance.GetValue()}K/W\nPower Margin: {self.power_margin.GetValue()}%")
+
+            text = analyzer.find_text_element("Track Width: ")
+            if text is not None:
+                text.SetText(f"Track Width: {self.track_width.GetValue()}mm\nTrack Spacing: {self.track_spacing.GetValue()}mm\nTrack Pitch: {self.track_pitch.GetValue()}mm\nWidth: {self.extent_width.GetValue()}mm\nHeight: {self.extent_height.GetValue()}mm")
+
+            # Write track details out into a csv file
+            tracks = analyzer.extract_trace_segments(factory, "F.Cu")
+            #self._export_tracks_to_csv(tracks, name = "extracted", timestamp = timestamp)
+
+        except Exception as e:
+            msg = f"Error generating heating element tracks: {e}"
+            msg += f"\n{traceback.format_exc()}"
+            error_msg(msg)
+
+    def _export_tracks_to_csv(self, tracks, name: Optional[str] = "", timestamp: Optional[str] = None):
+        """
+        Export trace segment details to a CSV file.
+        
+        Args:
+            tracks: List of TraceSegment objects
+            board: The PCB board object for getting board name
+        """
+        try:
+            # Get board name for filename
+            board_name = self.board.GetFileName()
+            if board_name:
+                # Extract just the filename without path and extension
+                board_name = os.path.splitext(os.path.basename(board_name))[0]
+            else:
+                board_name = "unknown_board"
+            
+            if name:
+                board_name += f"_{name}"
+            
+            # Create filename with timestamp
+            if timestamp is None:
+                timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+
+            csv_filename = f"{board_name}_tracks_{timestamp}.csv"
+            
+            # Write CSV file
+            with open(csv_filename, 'w', newline='', encoding='utf-8') as csvfile:
+                writer = csv.writer(csvfile)
+                
+                # Write header row
+                writer.writerow(['Type', 'Width (mm)', 'Start X (mm)', 'Start Y (mm)', 
+                               'End X (mm)', 'End Y (mm)', 'Mid X (mm)', 'Mid Y (mm)'])
+                
+                # Write data rows
+                for track in tracks:
+                    # Convert width from meters to mm
+                    width_mm = track.width * 1000
+                    
+                    # Convert coordinates from meters to mm
+                    start_x_mm = track.start_point[0] * 1000
+                    start_y_mm = track.start_point[1] * 1000
+                    end_x_mm = track.end_point[0] * 1000
+                    end_y_mm = track.end_point[1] * 1000
+                    
+                    if hasattr(track, 'mid_point'):
+                        # This is an ArcSegment
+                        mid_x_mm = track.mid_point[0] * 1000
+                        mid_y_mm = track.mid_point[1] * 1000
+                        writer.writerow(['Arc', f"{width_mm:.3f}", 
+                                       f"{start_x_mm:.3f}", f"{start_y_mm:.3f}",
+                                       f"{end_x_mm:.3f}", f"{end_y_mm:.3f}",
+                                       f"{mid_x_mm:.3f}", f"{mid_y_mm:.3f}"])
+                    else:
+                        # This is a LinearSegment
+                        writer.writerow(['Line', f"{width_mm:.3f}", 
+                                       f"{start_x_mm:.3f}", f"{start_y_mm:.3f}",
+                                       f"{end_x_mm:.3f}", f"{end_y_mm:.3f}", "", ""])
+            
+            # Show success message
+            factory = self.router.factory
+            msg = f"Track details exported to: {csv_filename}, total resistance = {factory.calculate_total_resistance(tracks, float(self.maximum_temperature_value)):.3f}Ω"
+            info_msg(msg)
+            debug(msg)
+
+            return timestamp
+            
+        except Exception as e:
+            # Show error message but don't crash the main operation
+            msg = f"Error exporting tracks to CSV: {e}"
+            msg += f"\n{traceback.format_exc()}"
+            error_msg(msg)

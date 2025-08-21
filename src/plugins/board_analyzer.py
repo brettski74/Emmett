@@ -39,12 +39,6 @@ class BoardAnalyzer:
         self.board = board
         self.parent = None
 
-    def _info_msg(self, msg):
-        wx.MessageBox(msg, "Emmett", wx.OK | wx.ICON_INFORMATION, self.parent)
-
-    def _error_msg(self, msg):
-        wx.MessageBox(msg, "Emmett Error", wx.OK | wx.ICON_ERROR, self.parent)
-    
     def find_text_element(self, prefix: str) -> pcbnew.PCB_TEXT:
         """
         Find the first text element on the board with text content starting with the specified prefix.
