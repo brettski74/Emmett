@@ -109,6 +109,7 @@ class EmmettForm(EmmettDialog):
 
         # This formula is a guess based on empirical data with 100x100mm hotplates and a conversation with GPT5.
         # It's based on the thermal resistance to ambient of many of my FR4 hotplates being measured in the 2.7-2.9 K/W range
+        # Updated now to reflect Aluminium PCB measured values of about 2.47 for a 100x100mm hotplate.
         # And GPT5's comment that making the hotplate twice as big (ie. 4 times the area) will scale the thermal resistance
         # down by a factor of about 1/3.36. I then extrapolated that into the power formula below.
         # It may or may not work well. We would need more empirical data to be sure or maybe a Phd in physics of heat flow.
@@ -117,16 +118,19 @@ class EmmettForm(EmmettDialog):
             self.thermal_resistance_value = board_text["Thermal Resistance"]
             thermal_resistance = float(board_text["Thermal Resistance"])
         else:
-            thermal_resistance = 2.8 * (10000/area) ** 0.874230616502018
+            thermal_resistance = 2.47 * (10000/area) ** 0.874230616502018
             self.thermal_resistance_value = fset(self.thermal_resistance, thermal_resistance)
 
         # If power is set, then use that and calculate the power margin, otherwise calcualte required power based on the power margin
+        power = 0
+        margin = 0
+        voltage = 0
         if "Power Margin" in board_text:
             self.power_margin.ChangeValue(board_text["Power Margin"])
             self.power_margin_value = board_text["Power Margin"]
             margin = float(board_text["Power Margin"])
         else:
-            margin = float(self.power_margin.GetValue() or 0)
+            margin = float(self.power_margin.GetValue())
 
         if "Power" in board_text:
             self.heater_power.ChangeValue(board_text["Power"])
@@ -140,9 +144,7 @@ class EmmettForm(EmmettDialog):
             self.heater_voltage_value = board_text["Voltage"]
             voltage = float(board_text["Voltage"])
         elif self.heater_voltage.GetValue() != "":
-            voltage = float(self.heater_voltage.GetValue() or 0)
-
-        self.calculate_target_resistance()
+            voltage = float(self.heater_voltage.GetValue())
 
         if margin <= 0:
             if power > 0:
@@ -157,8 +159,10 @@ class EmmettForm(EmmettDialog):
             self.heater_power_value = fset(self.heater_power, round(power, 2))
 
         if voltage <= 0:
-            voltage = round(sqrt(power * thermal_resistance), 2)
+            voltage = 20
             self.heater_voltage_value = fset(self.heater_voltage, voltage)
+
+        self.calculate_target_resistance()
 
         self.calculate_cold_current()
 
@@ -535,7 +539,7 @@ class EmmettForm(EmmettDialog):
 
     def click_geometryze_button(self, event):
         try:
-            self.router.optimize_tracks(fget(self.minimum_spacing) * 1000, fget(self.target_resistance), fget(self.maximum_temperature))
+            self.router.optimize_tracks(fget(self.minimum_spacing) * 1000, fget(self.target_resistance), fget(self.maximum_temperature), fget(self.track_thickness) * 1e-6)
 
             self.track_pitch_value = fset(self.track_pitch, self.router.pitch / 1000, True)
             self.track_spacing_value = fset(self.track_spacing, self.router.spacing / 1000, True)
@@ -551,7 +555,8 @@ class EmmettForm(EmmettDialog):
     def click_apply_button(self, event):
         """Handle when user clicks Generate button."""
         try:
-            self.click_geometryze_button(event)
+            if self.auto_geometryze.GetValue():
+                self.click_geometryze_button(event)
 
             debug(f"self.track_width_value: {self.track_width_value}, self.track_spacing_value: {self.track_spacing_value}")
             builder = self.builder
@@ -580,11 +585,14 @@ class EmmettForm(EmmettDialog):
 
             text = analyzer.find_text_element("Track Width: ")
             if text is not None:
-                text.SetText(f"Track Width: {self.track_width.GetValue()}mm\nTrack Spacing: {self.track_spacing.GetValue()}mm\nTrack Pitch: {self.track_pitch.GetValue()}mm\nWidth: {self.extent_width.GetValue()}mm\nHeight: {self.extent_height.GetValue()}mm")
+                text.SetText(f"Track Width: {self.track_width.GetValue()}mm\nTrack Spacing: {self.track_spacing.GetValue()}mm\nTrack Pitch: {self.track_pitch.GetValue()}mm\nTrack Thickness: {self.track_thickness.GetValue()}µm\nWidth: {self.extent_width.GetValue()}mm\nHeight: {self.extent_height.GetValue()}mm")
 
             # Write track details out into a csv file
             tracks = analyzer.extract_trace_segments(factory, "F.Cu")
             #self._export_tracks_to_csv(tracks, name = "extracted", timestamp = timestamp)
+
+            self.board.BuildConnectivity()
+            pcbnew.Refresh()
 
         except Exception as e:
             msg = f"Error generating heating element tracks: {e}"

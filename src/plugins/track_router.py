@@ -225,7 +225,7 @@ class TrackRouter(ABC):
 
         return result
 
-    def optimize_tracks(self, minimum_spacing: float, target_resistance: float, target_temperature: float):
+    def optimize_tracks(self, minimum_spacing: float, target_resistance: float, target_temperature: float, track_thickness: Optional[float] = None):
         """
         This algorithm should work for any track routing algorithm that has a track count limited by
         the number of tracks that can fit across the width of the board.
@@ -249,6 +249,10 @@ class TrackRouter(ABC):
 
         Returns a two-element tuple containing the track width and track spacing in microns
         """
+        if track_thickness is not None:
+            # TODO: implement track thickness
+            self.factory.thickness = track_thickness
+
         # Save the current state in case we fail and want to roll back
         save_pitch = self.pitch
         save_width = self.width

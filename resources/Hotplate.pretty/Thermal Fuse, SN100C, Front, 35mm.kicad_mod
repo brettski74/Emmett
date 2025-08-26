@@ -1,0 +1,160 @@
+(footprint "Thermal Fuse, SN100C, Front, 35mm"
+	(version 20241229)
+	(generator "pcbnew")
+	(generator_version "9.0")
+	(layer "F.Cu")
+	(property "Reference" "REF**"
+		(at 0 -3.6 0)
+		(unlocked yes)
+		(layer "F.SilkS")
+		(uuid "4d01397d-02cd-4b8d-bbe7-c9f3f874dd1e")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Value" "Thermal Fuse, SN100C, Front, 35mm"
+		(at -0.1 3.6 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(uuid "0307a132-0210-4e36-aad0-4ed6f586c395")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "c6963830-2e73-4eba-b4a2-daa399fee6d8")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Description" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "e2f6efaa-b5e6-4f3c-996e-6d09efdbe01a")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr smd)
+	(fp_line
+		(start -11.5 -2)
+		(end 11.5 -2)
+		(stroke
+			(width 0.25)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "8f6e74de-71c3-4969-bfa3-21ee2db29d12")
+	)
+	(fp_line
+		(start -11.5 2)
+		(end 11.5 2)
+		(stroke
+			(width 0.25)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "9ad5defa-c581-4f70-9c55-cd0f30004b84")
+	)
+	(fp_rect
+		(start -17.75 -2.25)
+		(end -12.25 2.25)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.CrtYd")
+		(uuid "09e212fa-2d6e-4479-82b0-f0ac793b3e27")
+	)
+	(fp_rect
+		(start 12.25 -2.25)
+		(end 17.75 2.25)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.CrtYd")
+		(uuid "0b60c575-f332-4f78-8fd8-6eeed6e3f683")
+	)
+	(fp_text user "Use 10AWG/6mm  Solid"
+		(at 0.2 -0.9 0)
+		(unlocked yes)
+		(layer "F.SilkS")
+		(uuid "3869cd68-2179-440e-8615-471bacbde811")
+		(effects
+			(font
+				(size 1 0.75)
+				(thickness 0.15)
+			)
+		)
+	)
+	(fp_text user "2"
+		(at 3.35 -1.3 0)
+		(unlocked yes)
+		(layer "F.SilkS")
+		(uuid "a489b8a7-f95a-45a4-8feb-2aae7ec7230b")
+		(effects
+			(font
+				(size 0.6 0.4)
+				(thickness 0.1)
+			)
+		)
+	)
+	(fp_text user "Copper Wire or Larger"
+		(at 0.2 0.8 0)
+		(unlocked yes)
+		(layer "F.SilkS")
+		(uuid "dba793d2-6772-45fd-ab4a-10b0299ea321")
+		(effects
+			(font
+				(size 1 0.75)
+				(thickness 0.15)
+			)
+		)
+	)
+	(fp_text user "${REFERENCE}"
+		(at 0 5.1 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(uuid "eabf8a4c-0fa4-4340-97f4-9fa42fe6866f")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(pad "1" smd roundrect
+		(at -15 0)
+		(size 5 4)
+		(layers "F.Cu" "F.Mask")
+		(roundrect_rratio 0.25)
+		(uuid "3becf58c-a2dc-4ce5-84ad-69a317032a70")
+	)
+	(pad "2" smd roundrect
+		(at 15 0)
+		(size 5 4)
+		(layers "F.Cu" "F.Mask")
+		(roundrect_rratio 0.25)
+		(uuid "e3554aeb-1af0-4b08-aab1-14040d5a9b31")
+	)
+	(embedded_fonts no)
+)
