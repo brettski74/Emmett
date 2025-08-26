@@ -277,6 +277,7 @@ class EmmettDialog ( wx.Dialog ):
         sbTrackGeometry.Add( fgTrackGeometry, 1, wx.EXPAND, 5 )
 
         self.auto_geometryze = wx.CheckBox( sbTrackGeometry.GetStaticBox(), wx.ID_ANY, u"Automatically Optimize Geometry", wx.DefaultPosition, wx.DefaultSize, 0 )
+        self.auto_geometryze.SetValue(True)
         sbTrackGeometry.Add( self.auto_geometryze, 0, wx.ALL, 5 )
 
 
