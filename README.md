@@ -2,6 +2,10 @@
 
 Welcome to the Emmett Element Router - a comprehensive helper for routing heating element traces.
 
+If you're looking for some way to control your hotplate, maybe [Milton](https://github.com/brettski74/Milton) can help.
+
+Join us on [Discord](https://discord.gg/dnQJEGFCZ9) to meet other people interested in DIY solder reflow hotplates, ask questions, make suggestions or discuss problems. You can also raise issues here and I'll take a look when I can.
+
 # Features
 
 - Supports single-sided Aluminium PCB layouts.
