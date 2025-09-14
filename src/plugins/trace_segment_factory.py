@@ -12,6 +12,7 @@ import pcbnew
 import math
 from typing import List, Tuple, Union, Optional
 from abc import ABC, abstractmethod
+from .my_debug import debug, enable_debug
 
 from .vector_utils import add_vec, sub_vec, scale_vec, shrink_vec, normalize_vec, perp_vec, invert_vec, x_mirror_vec, y_mirror_vec
 
@@ -134,6 +135,7 @@ class TraceSegment(ABC):
         """
         length = self.get_length()
         width = self.get_width()
+        debug(f"Thickness: {self._factory.thickness}")
         cross_sectional_area = width * self._factory.thickness
         
         # R = ρ * L / A
@@ -402,6 +404,7 @@ class ArcSegment(TraceSegment):
         
         # Calculate resistance using the correct formula
         # R = ρ × θ / (thickness × ln(R_outer / R_inner))
+        debug(f"Thickness: {self._factory.thickness}")
         base_resistance = (self._factory.resistivity * angle_diff) / (self._factory.thickness * math.log(outer_radius / inner_radius))
         
         # Apply adjustment factor to account for model limitations

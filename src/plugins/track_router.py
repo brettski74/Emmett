@@ -18,8 +18,6 @@ from .trace_segment_factory import TraceSegmentFactory, TraceSegment
 from .vector_utils import add_vec, sub_vec, scale_vec, shrink_vec, normalize_vec, perp_vec, invert_vec, x_mirror_vec, y_mirror_vec
 from .my_debug import debug, enable_debug
 
-enable_debug()
-
 MICRONS_TO_M = 1e-6
 MICRONS_TO_MM = 1e-3
 TOLERANCE = 0.00005

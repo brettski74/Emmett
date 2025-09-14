@@ -20,8 +20,6 @@ from .board_analyzer import BoardAnalyzer
 from .board_builder import BoardBuilder
 from .my_debug import debug, enable_debug
 
-enable_debug()
-
 KICAD_MICRONS = 1e-3
 
 class AlTrackRouter(TrackRouter):

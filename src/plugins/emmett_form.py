@@ -18,8 +18,6 @@ from .track_router import TrackRouter
 from .al_track_router import AlTrackRouter
 from .gui_utils import info_msg, error_msg, find_parent_window
 
-enable_debug()
-
 def resource_dir() -> str:
     plugin_dir = os.path.dirname(os.path.abspath(__file__))
     namespace = os.path.basename(plugin_dir)
@@ -478,6 +476,20 @@ class EmmettForm(EmmettDialog):
         fset(self.heater_power, round(power, 2))
         self.heater_power_leave(event)
 
+    def track_thickness_enter(self, event):
+        self.track_thickness_leave(event)
+
+    def track_thickness_leave(self, event):
+        newValue = field_normalize(self.track_thickness)
+        debug(f"track_thickness_leave: {newValue}")
+
+        if newValue == self.track_thickness_value:
+            return
+
+        self.track_thickness_value = newValue
+
+        self.router.factory.thickness = float(newValue) * 1e-6
+
     def heater_power_enter(self, event):
         self.heater_power_leave(event)
 
@@ -562,6 +574,7 @@ class EmmettForm(EmmettDialog):
             builder = self.builder
             router = self.router
             factory = router.factory
+            factory.thickness = float(self.track_thickness_value) * 1e-6
             router.width = float(self.track_width_value) * 1e3
             router.spacing = float(self.track_spacing_value) * 1e3
             tracks = router.update_board(builder)

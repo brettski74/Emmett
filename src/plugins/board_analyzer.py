@@ -20,7 +20,6 @@ from .my_debug import debug, stringify, enable_debug, stringify
 KICAD_UNITS = 1e-9
 KICAD_MM = 1e-6
 
-
 class BoardAnalyzer:
     """
     Analyzes loaded KiCad PCB layouts to extract trace information.

@@ -3,7 +3,7 @@
 
 # Plugin information
 PLUGIN_NAME = emmett
-PLUGIN_VERSION = 0.1b
+PLUGIN_VERSION = 0.1.1b
 PLUGIN_AUTHOR = Your Name
 PLUGIN_DESCRIPTION = Route PCB elements with Emmett Element Router
 PID = $(shell echo $$PPID)
