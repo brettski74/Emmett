@@ -192,7 +192,7 @@ class EmmettDialog ( wx.Dialog ):
 
         bTrackResistivity = wx.BoxSizer( wx.HORIZONTAL )
 
-        self.m_TrackMaterial = wx.StaticText( sbTrackSpecifications.GetStaticBox(), wx.ID_ANY, u"Track Material", wx.DefaultPosition, wx.DefaultSize, wx.ALIGN_RIGHT )
+        self.m_TrackMaterial = wx.StaticText( sbTrackSpecifications.GetStaticBox(), wx.ID_ANY, u"Track Material:", wx.DefaultPosition, wx.DefaultSize, wx.ALIGN_RIGHT )
         self.m_TrackMaterial.Wrap( -1 )
 
         bTrackResistivity.Add( self.m_TrackMaterial, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT|wx.ALL, 5 )
@@ -207,11 +207,6 @@ class EmmettDialog ( wx.Dialog ):
 
 
         gTrackSpecifications.Add( bTrackResistivity, 1, wx.ALIGN_CENTER_HORIZONTAL|wx.ALIGN_RIGHT, 5 )
-
-        self.m_BlankUndeMinSpacing = wx.StaticText( sbTrackSpecifications.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, wx.ALIGN_CENTER_HORIZONTAL|wx.ALIGN_LEFT )
-        self.m_BlankUndeMinSpacing.Wrap( -1 )
-
-        gTrackSpecifications.Add( self.m_BlankUndeMinSpacing, 0, wx.ALL, 5 )
 
         self.m_CopperWeights = wx.StaticText( sbTrackSpecifications.GetStaticBox(), wx.ID_ANY, u"1oz Copper = 35µm\n2oz Copper = 70µm", wx.DefaultPosition, wx.DefaultSize, wx.ALIGN_CENTER_HORIZONTAL|wx.ALIGN_LEFT )
         self.m_CopperWeights.Wrap( -1 )
@@ -233,7 +228,7 @@ class EmmettDialog ( wx.Dialog ):
         self.m_technicalPanel.SetSizer( bTechnicalPanel )
         self.m_technicalPanel.Layout()
         bTechnicalPanel.Fit( self.m_technicalPanel )
-        self.m_main_notebook.AddPage( self.m_technicalPanel, u"Technical", True )
+        self.m_main_notebook.AddPage( self.m_technicalPanel, u"Technical", False )
         self.m_calculationPanel = wx.Panel( self.m_main_notebook, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, wx.TAB_TRAVERSAL )
         bCalculationPanel = wx.BoxSizer( wx.VERTICAL )
 
@@ -438,6 +433,37 @@ class EmmettDialog ( wx.Dialog ):
         self.m_calculationPanel.Layout()
         bCalculationPanel.Fit( self.m_calculationPanel )
         self.m_main_notebook.AddPage( self.m_calculationPanel, u"Calculations", False )
+        self.m_layoutPanel = wx.Panel( self.m_main_notebook, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, wx.TAB_TRAVERSAL )
+        bLayout = wx.BoxSizer( wx.VERTICAL )
+
+        bLayoutList = wx.BoxSizer( wx.HORIZONTAL )
+
+        bLayoutList.SetMinSize( wx.Size( -1,16 ) )
+        self.m_Layout = wx.StaticText( self.m_layoutPanel, wx.ID_ANY, u"Layout:", wx.DefaultPosition, wx.DefaultSize, wx.ALIGN_RIGHT )
+        self.m_Layout.Wrap( -1 )
+
+        bLayoutList.Add( self.m_Layout, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5 )
+
+        layoutChoices = [ u"Bootstrappable", u"Continuous" ]
+        self.layout = wx.Choice( self.m_layoutPanel, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, layoutChoices, wx.CB_SORT )
+        self.layout.SetSelection( 0 )
+        bLayoutList.Add( self.layout, 0, wx.ALL, 5 )
+
+
+        bLayout.Add( bLayoutList, 0, wx.ALIGN_TOP|wx.FIXED_MINSIZE, 5 )
+
+        self.layoutDescription = wx.TextCtrl( self.m_layoutPanel, wx.ID_ANY, u"This is where we put the description of the selected layout, including pre-requisites for the PCB, the type of PCB it's designed for, what primary characteristics it has and any other relevant details.", wx.DefaultPosition, wx.DefaultSize, wx.TE_MULTILINE|wx.TE_WORDWRAP )
+        self.layoutDescription.SetForegroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_WINDOWTEXT ) )
+        self.layoutDescription.SetBackgroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_ACTIVECAPTION ) )
+        self.layoutDescription.Enable( False )
+
+        bLayout.Add( self.layoutDescription, 1, wx.ALL|wx.EXPAND, 5 )
+
+
+        self.m_layoutPanel.SetSizer( bLayout )
+        self.m_layoutPanel.Layout()
+        bLayout.Fit( self.m_layoutPanel )
+        self.m_main_notebook.AddPage( self.m_layoutPanel, u"Layout", True )
 
         bSizer3.Add( self.m_main_notebook, 1, wx.EXPAND |wx.ALL, 5 )
 
@@ -546,6 +572,7 @@ class EmmettDialog ( wx.Dialog ):
         self.track_pitch.Bind( wx.EVT_TEXT, self.track_pitch_change )
         self.track_pitch.Bind( wx.EVT_TEXT_ENTER, self.track_pitch_enter )
         self.resize_button.Bind( wx.EVT_BUTTON, self.click_resize_button )
+        self.layout.Bind( wx.EVT_CHOICE, self.layoutChange )
         self.analyze_button.Bind( wx.EVT_BUTTON, self.click_analyze_button )
         self.calculate_button.Bind( wx.EVT_BUTTON, self.click_geometryze_button )
         self.load_button.Bind( wx.EVT_BUTTON, self.click_load_button )
@@ -671,6 +698,9 @@ class EmmettDialog ( wx.Dialog ):
         event.Skip()
 
     def click_resize_button( self, event ):
+        event.Skip()
+
+    def layoutChange( self, event ):
         event.Skip()
 
     def click_analyze_button( self, event ):

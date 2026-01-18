@@ -39,6 +39,39 @@ class RectangularPad:
   def clear_height(self):
     return self.height + self.courtyard * 2
 
+  def sync_position(self):
+    if (self.footprint is not None):
+      position = pcbnew.VECTOR2I_MM(self.x*1e-3, self.y*1e-3)
+      self.footprint.SetPosition(position)
+
+  def move_by(self, deltax: float, deltay: float):
+    self.x += deltax
+    self.y += deltay
+
+  def move_left(self, left: float):
+    self.x = left + self.width/2
+
+  def move_clear_left(self, left: float):
+    self.x = left + self.width/2 + self.courtyard
+
+  def move_right(self, right: float):
+    self.x = right - self.width/2
+
+  def move_clear_right(self, right: float):
+    self.x = right - self.width/2 - self.courtyard
+
+  def move_top(self, top: float):
+    self.y = top + self.height/2
+
+  def move_clear_top(self, top: float):
+    self.y = top + self.height/2 + self.courtyard
+
+  def move_bottom(self, bottom: float):
+    self.y = bottom - self.height/2
+
+  def move_clear_bottom(self, bottom: float):
+    self.y = bottom - self.height/2 - self.courtyard
+
   def scale(self, factor: float):
     self.x *= factor
     self.y *= factor

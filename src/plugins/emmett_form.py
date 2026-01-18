@@ -13,9 +13,11 @@ from .emmett_dialog import EmmettDialog
 from .board_builder import BoardBuilder
 from .board_analyzer import BoardAnalyzer
 from .trace_segment_factory import TraceSegmentFactory, temperature_adjust_resistance
-from .my_debug import debug,enable_debug, stringify
+from .my_debug import debug, enable_debug, stringify
 from .track_router import TrackRouter
 from .al_track_router import AlTrackRouter
+from .bootstrap_track_router import BootstrapTrackRouter
+from .trace_segment_factory import TraceSegmentFactory
 from .gui_utils import info_msg, error_msg, find_parent_window
 
 def resource_dir() -> str:
@@ -62,7 +64,7 @@ def field_normalize(field) -> str:
     return result
 
 class EmmettForm(EmmettDialog):
-    def __init__(self, board: pcbnew.BOARD, builder: BoardBuilder, analyzer: BoardAnalyzer, router: TrackRouter):
+    def __init__(self, board: pcbnew.BOARD, builder: BoardBuilder, analyzer: BoardAnalyzer, factory: TraceSegmentFactory):
         super().__init__(find_parent_window())
 
         self.logo_bitmap.SetBitmap(wx.Bitmap(os.path.join(resource_dir(), "emmett-192.png")))
@@ -70,7 +72,7 @@ class EmmettForm(EmmettDialog):
         self.board = board
         self.builder = builder
         self.analyzer = analyzer
-        self.router = router
+        self.factory = factory
 
         self.track_width_value = ""
         self.track_spacing_value = ""
@@ -85,10 +87,51 @@ class EmmettForm(EmmettDialog):
         self.power_margin_value = ""
         self.target_resistance_value = ""
 
+        self.layoutChange(None)
+
         self.click_analyze_button(None)
 
         self.m_main_notebook.ChangeSelection(0)
         self.heater_voltage.SetFocus()
+
+    def getLayout(self) -> str:
+        index = self.layout.GetSelection()
+        return self.layout.GetString(index)
+
+    def layoutChange(self, event):
+        theLayout = self.getLayout()
+
+        enable_debug(True)
+        debug(f"layoutChange: {theLayout}")
+
+        if theLayout == "Bootstrappable":
+            self.router = BootstrapTrackRouter(self.factory)
+            description = """
+Designed for use on aluminium PCBs with a thermal fuse and a bootstrap jumper to facilitate preheating the board for initial setup.
+
+Requires:
+
+  * 2 Power connection pads near the top edge of the board.
+  * 2 thermal fuse pads near the centre of the board.
+  * 4 M3 mounting holes near the corners of the board.
+  * 2 Bootstrap pads near the left edge of the board.
+""".strip()
+        elif theLayout == "Continuous": 
+            self.router = AlTrackRouter(self.factory)
+            description = """
+The original design for use on aluminium PCBs with a thermal fuse. There is no bootstrap jumper, so initial board setup may be more challenging without some way to preheat it. Oven setup is also an option.
+
+Requires:
+
+  * 2 Power connection pads near the top edge of the board.
+  * 2 thermal fuse pads near the centre of the board.
+  * 4 M3 mounting holes near the corners of the board.
+""".strip()
+        else:
+            self.router = None
+            description = "Unknown layout. Please excuse the crudity of this description. I didn't have time to research the details or write it."
+        
+        self.layoutDescription.ChangeValue(description)
 
     def click_clear_button(self, event):
         self.builder.clear_tracks()

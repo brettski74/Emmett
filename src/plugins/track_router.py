@@ -14,14 +14,17 @@ from typing import List, Tuple, Optional
 
 from .board_analyzer import BoardAnalyzer
 from .board_builder import BoardBuilder
-from .trace_segment_factory import TraceSegmentFactory, TraceSegment
-from .vector_utils import add_vec, sub_vec, scale_vec, shrink_vec, normalize_vec, perp_vec, invert_vec, x_mirror_vec, y_mirror_vec
+from .trace_segment_factory import TraceSegmentFactory, TraceSegment, ArcSegment
+from .pad_defs import RectangularPad, CircularPad
+from .vector_utils import add_vec, sub_vec, scale_vec, shrink_vec, normalize_vec, distance, perp_vec, invert_vec, x_mirror_vec, y_mirror_vec
 from .my_debug import debug, enable_debug
+
 
 MICRONS_TO_M = 1e-6
 MICRONS_TO_MM = 1e-3
 TOLERANCE = 0.00005
 
+enable_debug(True)
 
 def mm(microns):
     if isinstance(microns, tuple):
@@ -38,6 +41,20 @@ def metres(microns):
         return microns * MICRONS_TO_M
     else:
         raise ValueError(f"Invalid type: {type(microns)}")
+
+def overlap(a1, a2, b1, b2):
+    amin = min(a1, a2)
+    amax = max(a1, a2)
+    bmin = min(b1, b2)
+    bmax = max(b1, b2)
+    
+    if amin >= bmin and amin <= bmax:
+        return True
+
+    if bmin >= amin and bmin <= amax:
+        return True
+
+    return False
 
 class TrackRouter(ABC):
     """
@@ -184,13 +201,13 @@ class TrackRouter(ABC):
             ValueError: If the parameters create an invalid pattern
         """
         if count < 0:
-            raise ValueError("count must be at least 0")
+            raise ValueError(f"count ({count}) must be at least 0")
         
         if spacing < 0.0002:
-            raise ValueError("spacing must be greater than 0.0002m")
+            raise ValueError(f"spacing ({spacing}) must be greater than 0.0002m")
 
         if direction == 0:
-            raise ValueError("direction must be 1 or -1")
+            raise ValueError(f"direction ({direction}) must be 1 or -1")
         
         # Calculate the gradient of the basis line
         pitch = width + spacing
@@ -222,6 +239,22 @@ class TrackRouter(ABC):
             count -= 1
 
         return result
+
+    def increment_track_count(self, count: int) -> int:
+        """
+        Increment the track count to the next permissable track count above the provided count.
+
+        The default implementation simply increments the track count by 2.
+        """
+        return count+2
+
+    def decrement_track_count(self, count: int) -> int:
+        """
+        Decrement the track count to the next permissable track count below the provided count.
+
+        The default implementation simply decrements the track count by 2.
+        """
+        return count-2
 
     def optimize_tracks(self, minimum_spacing: float, target_resistance: float, target_temperature: float, track_thickness: Optional[float] = None):
         """
@@ -273,14 +306,14 @@ class TrackRouter(ABC):
             debug(f"track_count: {track_count}, pitch: {self.pitch}, width: {self.width}, resistance: {resistance}")
 
             if resistance > target_resistance:
-                track_count = track_count - 2
+                track_count = self.decrement_track_count(track_count)
                 tracks = last_tracks
                 break
 
             wlo = self.width
             rlo = resistance
             last_tracks = tracks
-            track_count = track_count + 2
+            track_count = self.increment_track_count(track_count)
 
         if resistance == 0:
             self.pitch = save_pitch
@@ -302,7 +335,7 @@ class TrackRouter(ABC):
 
         # Sometimes we struggle to get close enough to the target resistance at the highest possible track count, so try a
         # a couple of lower counts to see if we can get closer.
-        track_count -= 2
+        track_count = self.decrement_track_count(track_count)
         r2 = self.finish_optimization(target_resistance, target_temperature, working_width/track_count - 10, minimum_spacing)
         err2 = fabs(r2 - target_resistance)
         debug(f"count: {track_count}, width: {width}, resistance: {r2}, error: {err2}")
@@ -313,7 +346,7 @@ class TrackRouter(ABC):
             error = err2
         debug(f"width: {width}, resistance: {resistance}, error: {error}")
 
-        track_count -= 2
+        track_count = self.decrement_track_count(track_count)
         r2 = self.finish_optimization(target_resistance, target_temperature, working_width/track_count - 10, minimum_spacing)
         debug(f"count: {track_count}, width: {width}, resistance: {r2}, error: {err2}")
         if fabs(r2 - target_resistance) < (resistance - target_resistance):
@@ -328,6 +361,270 @@ class TrackRouter(ABC):
         self.spacing = self.pitch - self.width
 
         return resistance
+
+    def avoid_pad(self, tracks: List[TraceSegment], pad: RectangularPad):
+        """
+        Adjust tracks to avoid a pad.
+        """
+        for i in range(len(tracks)):
+            if type(tracks[i]) != ArcSegment:
+                continue
+
+            t = tracks[i]
+
+            # Determine axial alignment of the arc segment
+            if t.start_point[1] != t.end_point[1]:
+                self.avoid_pad_x(tracks, i, pad)
+            else:
+                self.avoid_pad_y(tracks, i, pad)
+
+    def avoid_pad_x(self, tracks: List[TraceSegment], index: int, pad: RectangularPad):
+        inl = tracks[index-1]
+        arc = tracks[index]
+        out = tracks[index+1]
+
+        enable_debug(True)
+
+        # Determine if the arc segment is completely above the pad
+        width = arc.width
+        arc_top = min(arc.start_point[1], arc.end_point[1]) - width/2
+        arc_bottom = max(arc.start_point[1], arc.end_point[1]) + width/2
+        arc_mid = (arc_top + arc_bottom) / 2
+
+        pad_top = pad.clear_top() * 1e-6
+        pad_bottom = pad.clear_bottom() * 1e-6
+        offset = 0
+
+        debug(f"arc_top: {arc_top}, arc_bottom: {arc_bottom}, arc_mid: {arc_mid}, pad_top: {pad_top}, pad_bottom: {pad_bottom}")
+
+        # No vertical overlap, nothing to do
+        if not overlap(arc_top, arc_bottom, pad_top, pad_bottom):
+            return
+
+        pad_left = pad.clear_left() * 1e-6
+        pad_right = pad.clear_right() * 1e-6
+
+        # Determine direction of the arc segment - right side arcs
+        if arc.start_point[0] < arc.mid_point[0]:
+            line_left = min(inl.start_point[0], inl.end_point[0], out.start_point[0], out.end_point[0])
+
+            # Skip this if the pad is closer to the other end of the lines
+            arc_left = arc.start_point[0]
+            if (pad_left - line_left) < (arc_left - pad_right):
+                return
+
+            debug(f"pad_left: {pad_left}, pad_right: {pad_right}, line_left: {line_left}")
+
+            arc_radius = (arc_bottom - arc_mid)
+            arc_right = arc_left + arc_radius
+            debug(f"arc_left: {arc_left}, arc_right: {arc_right}, arc_radius: {arc_radius}, pad_left: {pad_left}")
+
+            if arc_mid >= pad_top and arc_mid <= pad_bottom and arc_right > pad_left:
+                offset = pad_left - arc_right
+
+            elif arc_mid < pad_top and (arc_left >= pad_left or distance((arc_left, arc_mid), (pad_left, pad_top)) < arc_radius):
+                deltay = pad_top - arc_mid
+                new_left = pad_left - sqrt(arc_radius*arc_radius - deltay*deltay)
+                offset = new_left - arc_left
+            
+            elif arc_mid > pad_bottom and (arc_left >= pad_left or distance((arc_left, arc_mid), (pad_left, pad_bottom)) < arc_radius):
+                deltay = arc_mid - pad_bottom
+                new_left = pad_left - sqrt(arc_radius*arc_radius - deltay*deltay)
+                offset = new_left - arc_left
+
+        else:
+            line_right = max(inl.start_point[0], inl.end_point[0], out.start_point[0], out.end_point[0])
+
+        debug(f"offset: {offset}")
+        if offset != 0:
+            arc.move((offset, 0))
+            inl.move_end((offset, 0))
+            out.move_start((offset, 0))
+
+    def avoid_pad_y(self, tracks: List[TraceSegment], index: int, pad: RectangularPad):
+        inl = tracks[index-1]
+        arc = tracks[index]
+        out = tracks[index+1]
+
+        enable_debug(True)
+
+        # Determine if the arc segment is completely above the pad
+        width = arc.width
+        arc_left = min(arc.start_point[0], arc.end_point[0]) - width/2
+        arc_right = max(arc.start_point[0], arc.end_point[0]) + width/2
+        arc_mid = (arc_left + arc_right) / 2
+
+        pad_left = pad.clear_left() * 1e-6
+        pad_right = pad.clear_right() * 1e-6
+        offset = 0
+
+        debug(f"arc_left: {arc_left}, arc_right: {arc_right}, arc_mid: {arc_mid}, pad_left: {pad_left}, pad_right: {pad_right}")
+
+        # No horizontal overlap, nothing to do
+        if not overlap(arc_left, arc_right, pad_left, pad_right):
+            return
+
+        pad_top = pad.clear_top() * 1e-6
+        pad_bottom = pad.clear_bottom() * 1e-6
+
+        # Determine direction of the arc segment - Bottom side arcs
+        if arc.start_point[1] < arc.mid_point[1]:
+            line_top = min(inl.start_point[1], inl.end_point[1], out.start_point[1], out.end_point[1])
+
+            arc_top = arc.start_point[1]
+            # Skip this if the pad is closer to the other end of the lines
+            if (pad_top - line_top) < (arc_top - pad_bottom):
+                return
+
+            arc_radius = (arc_right - arc_mid)
+            arc_bottom = arc_top + arc_radius
+
+            debug(f"arc_top: {arc_top}, arc_bottom: {arc_bottom}, arc_radius: {arc_radius}, pad_top: {pad_top}")
+
+            if arc_mid >= pad_left and arc_mid <= pad_right and arc_bottom > pad_top:
+                offset = pad_top - arc_bottom
+
+            elif arc_mid < pad_left and (arc_top >= pad_top or distance((arc_top, arc_mid), (pad_left, pad_top)) < arc_radius):
+                deltax = pad_left - arc_mid
+                debug(f"deltax: {deltax}")
+                new_top = pad_top - sqrt(arc_radius*arc_radius - deltax*deltax)
+                offset = new_top - arc_top
+
+            elif arc_mid > pad_right and (arc_top >= pad_top or distance((arc_top, arc_mid), (pad_right, pad_top)) < arc_radius):
+                deltax = arc_mid - pad_right
+                debug(f"deltax: {deltax}")
+                new_top = pad_top - sqrt(arc_radius*arc_radius - deltax*deltax)
+                offset = new_top - arc_top
+
+        # Else top side arcs
+        else:
+            line_bottom = max(inl.start_point[1], inl.end_point[1], out.start_point[1], out.end_point[1])
+            arc_bottom = arc.start_point[1]
+            # Skip this if the pad is closer to the other end of the lines
+            debug(f"pad_bottom: {pad_bottom}, line_bottom: {line_bottom}, arc_bottom: {arc_bottom}, pad_top: {pad_top}")
+            if (pad_bottom - line_bottom) > (arc_bottom - pad_top):
+                return
+
+            arc_radius = (arc_right - arc_mid)
+            arc_top = arc_bottom - arc_radius
+            debug(f"arc_bottom: {arc_bottom}, arc_top: {arc_top}, arc_radius: {arc_radius}, pad_bottom: {pad_bottom}")
+
+            if arc_mid >= pad_left and arc_mid <= pad_right and arc_top < pad_bottom:
+                offset = pad_bottom - arc_top
+
+            elif arc_mid < pad_left and (arc_bottom <= pad_bottom or distance((arc_bottom, arc_mid), (pad_bottom, pad_left)) < arc_radius):
+                deltax = pad_left - arc_mid
+                debug(f"deltax: {deltax}")
+                new_bottom = pad_bottom + sqrt(arc_radius*arc_radius - deltax*deltax)
+                offset = new_bottom - arc_bottom
+
+            elif arc_mid > pad_right and (arc_bottom <= pad_bottom or distance((arc_bottom, arc_mid), (pad_right, pad_bottom)) < arc_radius):
+                deltax = arc_mid - pad_right
+                debug(f"deltax: {deltax}")
+                new_bottom = pad_bottom + sqrt(arc_radius*arc_radius - deltax*deltax)
+                offset = new_bottom - arc_bottom
+
+        if offset != 0:
+            debug(f"offset: {offset}")
+            arc.move((0, offset))
+            inl.move_end((0, offset))
+            out.move_start((0, offset))
+
+    def avoid_hole(self, tracks: List[TraceSegment], hole: CircularPad, clearance: Optional[float] = -1.0):
+        """
+        Adjust tracks to avoid a hole.
+        """
+        if clearance <= 0.0:
+            clearance = hole.clear_radius()
+        
+        clearance += self.pitch
+        cl2 = clearance * clearance
+        ycentre = (self.top + self.bottom) / 2
+        left = hole.x - clearance
+        right = hole.x + clearance
+
+        hc = (hole.x, hole.y)
+
+        # Still need distance check because the x-coordinate alone may pick up corners at the wrond end.
+        # sqrt(2) * clearance should catch everything. 1.5 x gives a little extra margin while still
+        # avoiding incorrectly picking up corners at the wrong end,
+        close = clearance * 1.5
+
+        for i in range(len(tracks)):
+            if type(tracks[i]) != ArcSegment:
+                continue
+
+            t = tracks[i]
+
+            if t.start_point[1] != t.end_point[1]:
+                continue
+            
+            centre = (t.mid_point[0] * 1e6, t.start_point[1] * 1e6)
+            d = distance(centre, hc)
+
+            if left <= centre[0] <= right and d < close:
+                dx = hc[0] - centre[0]
+                dy = sqrt(cl2 - dx*dx)
+
+                if hc[1] < ycentre:
+                    y = hc[1] + dy
+                else:
+                    y = hc[1] - dy
+
+                ddy = y/1e6 - t.start_point[1]
+                self.shorten_track_pair(tracks, i, fabs(ddy));
+
+    def shorten_track_pair(self, list: List[TraceSegment], index: int, offset: float):
+        """
+        Shorten a pair of tracks in a serpentine track to avoid an obstacle.
+
+        The track pair is identified by the arc segment that joins them. For a normal
+        serpentine track, the index of arc segments will be odd.
+
+        Args:
+            list: List of TraceSegment objects
+            index: Index of the arc segment that joins the track pair together
+            offset: The offset to apply to the ends of the two tracks
+        """
+        if type(list[index]) != ArcSegment:
+            raise ValueError(f"Track {index} is not an arc segment")
+
+        inl= list[index-1]
+        arc = list[index]
+        out = list[index+1]
+
+        if arc.start_point[1] < arc.mid_point[1]:
+            offset = -offset
+
+        arc.move((0, offset))
+        inl.move_end((0, offset))
+        out.move_start((0, offset))
+
+    def corner_90(self, start: Tuple[float, float], end: Tuple[float, float], scale: float = 1.0) -> TraceSegment:
+        """
+        Create a 90 degree corner arc.
+        """
+        start = scale_vec(start, scale)
+        end = scale_vec(end, scale)
+        debug(f"start: {start}, end: {end}")
+
+        deltax = end[0] - start[0]
+        deltay = end[1] - start[1]
+        quadrant = deltax * deltay
+
+        if abs(deltax) - abs(deltay) > 1e-9:
+            msg  = f"Corner 90: deltax ({deltax:.6f}) and deltay ({deltay:.6f}) are not equal"
+            raise ValueError(msg)
+
+        if abs(deltax) < 1e-9:
+            raise ValueError("Corner 90: deltax is zero")
+        
+        if quadrant < 0:
+            mid = (end[0] - deltax/sqrt(2), start[1] + deltay/sqrt(2))
+        else:
+            mid = (start[0] + deltax/sqrt(2), end[1] - deltay/sqrt(2))
+
+        return self.factory.create_arc_segment(start, mid, end, self.width / 1e6)
 
     def finish_optimization(self, target_resistance, temperature, pitch, minimum_spacing):
         global TOLERANCE

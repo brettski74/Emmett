@@ -8,6 +8,7 @@ from .board_builder import BoardBuilder
 from .board_analyzer import BoardAnalyzer
 from .emmett_form import EmmettForm
 from .al_track_router import AlTrackRouter
+from .bootstrap_track_router import BootstrapTrackRouter
 from .my_debug import debug, enable_debug
 from .gui_utils import info_msg, error_msg
 
@@ -35,8 +36,7 @@ class EmmettAction( pcbnew.ActionPlugin ):
             analyzer = BoardAnalyzer(board)
             factory = TraceSegmentFactory()
 
-            router = AlTrackRouter(factory)
-            form = EmmettForm(board, builder, analyzer, router)
+            form = EmmettForm(board, builder, analyzer, factory)
 
             form.ShowModal()
             form.Destroy()
