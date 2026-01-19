@@ -11,7 +11,7 @@ import pcbnew
 from .my_debug import debug, enable_debug
 
 from typing import List, Tuple, Optional, Dict
-from .track_router import TrackRouter,metres
+from .track_router import TrackRouter, PRECISION
 from .trace_segment_factory import TraceSegment, TraceSegmentFactory, ArcSegment, LinearSegment
 from .pad_defs import RectangularPad, CircularPad
 from .vector_utils import scale_vec, shrink_vec, add_vec, sub_vec, distance, perp_vec, normalize_vec
@@ -393,6 +393,18 @@ class BootstrapTrackRouter(TrackRouter):
             self.corner_90(scale_vec((link34_left, link34_bottom), 1e-6), link34_end),
         ]
 
+        ## Extend the one track pair in the centre opposite wheter the two traces turn to connect to the fuse pads
+        ref_point = (self.split_centre * 1e-6, self.centre[1] * 1e-6)
+        i_extend = self.closest_arc(second, ref_point)
+        i_centre = self.closest_arc(fourth, ref_point)
+        c_extend = self.arc_centre(second[i_extend])
+        c_centre = self.arc_centre(fourth[i_centre])
+
+        new_xc = round(c_centre[0] + sqrt(5) * self.pitch * 1e-6, PRECISION)
+        deltax = c_extend[0] - new_xc
+        debug(f"new_xc: {new_xc}, pitch: {self.pitch}, c_centre: {c_centre}, c_extend: {c_extend}, ref_point: {ref_point}, deltax: {deltax}")
+        self.shorten_track_pair(second, i_extend, deltax)
+
         result.extend(second)
         result.extend(third)
         result.extend(fourth)
@@ -438,11 +450,14 @@ class BootstrapTrackRouter(TrackRouter):
             self.vert_lcount = self.vert_lcount - 1
             self.vert_centre = self.vert_centre - self.pitch
 
-            self.connections[1].move_clear_left(self.vert_centre - self.spacing/2 + 5*self.pitch)
+            # Fudge Factor to ensure clearance from adjacent trace
+            self.connections[1].move_clear_left(self.vert_centre - self.spacing/2 + 5*self.pitch - 0.00001)
         else:
-            self.connections[1].move_clear_left(self.vert_centre - self.spacing/2 + 3*self.pitch)
+            # Fudge Factor to ensure clearance from adjacent trace
+            self.connections[1].move_clear_left(self.vert_centre - self.spacing/2 + 3*self.pitch - 0.00001)
 
-        self.connections[0].move_clear_right(self.vert_centre + self.spacing/2 - 3*self.pitch)
+        # Fudge Factor to ensure clearance from adjacent trace
+        self.connections[0].move_clear_right(self.vert_centre + self.spacing/2 - 3*self.pitch + 0.00001)
         self.connections[0].move_top(self.top + self.margin)
         self.connections[1].move_top(self.top + self.margin)
 

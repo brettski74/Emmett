@@ -19,6 +19,9 @@ from .pad_defs import RectangularPad, CircularPad
 from .vector_utils import add_vec, sub_vec, scale_vec, shrink_vec, normalize_vec, distance, perp_vec, invert_vec, x_mirror_vec, y_mirror_vec
 from .my_debug import debug, enable_debug
 
+# Roundeing errors will be the death of us!
+# Number of decimal poalces to round to to avoid spurious mathematical and/or layout errors due to rounding errors
+PRECISION = 9
 
 MICRONS_TO_M = 1e-6
 MICRONS_TO_MM = 1e-3
@@ -387,12 +390,12 @@ class TrackRouter(ABC):
 
         # Determine if the arc segment is completely above the pad
         width = arc.width
-        arc_top = min(arc.start_point[1], arc.end_point[1]) - width/2
-        arc_bottom = max(arc.start_point[1], arc.end_point[1]) + width/2
-        arc_mid = (arc_top + arc_bottom) / 2
+        arc_top = round(min(arc.start_point[1], arc.end_point[1]) - width/2, PRECISION)
+        arc_bottom = round(max(arc.start_point[1], arc.end_point[1]) + width/2, PRECISION)
+        arc_mid = round((arc_top + arc_bottom) / 2, PRECISION)
 
-        pad_top = pad.clear_top() * 1e-6
-        pad_bottom = pad.clear_bottom() * 1e-6
+        pad_top = round(pad.clear_top() * 1e-6, PRECISION)
+        pad_bottom = round(pad.clear_bottom() * 1e-6, PRECISION)
         offset = 0
 
         debug(f"arc_top: {arc_top}, arc_bottom: {arc_bottom}, arc_mid: {arc_mid}, pad_top: {pad_top}, pad_bottom: {pad_bottom}")
@@ -401,39 +404,41 @@ class TrackRouter(ABC):
         if not overlap(arc_top, arc_bottom, pad_top, pad_bottom):
             return
 
-        pad_left = pad.clear_left() * 1e-6
-        pad_right = pad.clear_right() * 1e-6
+        pad_left = round(pad.clear_left() * 1e-6, PRECISION)
+        pad_right = round(pad.clear_right() * 1e-6, PRECISION)
 
         # Determine direction of the arc segment - right side arcs
         if arc.start_point[0] < arc.mid_point[0]:
-            line_left = min(inl.start_point[0], inl.end_point[0], out.start_point[0], out.end_point[0])
+            line_left = round(min(inl.start_point[0], inl.end_point[0], out.start_point[0], out.end_point[0]), PRECISION)
 
             # Skip this if the pad is closer to the other end of the lines
-            arc_left = arc.start_point[0]
+            arc_left = round(arc.start_point[0], PRECISION)
             if (pad_left - line_left) < (arc_left - pad_right):
                 return
 
             debug(f"pad_left: {pad_left}, pad_right: {pad_right}, line_left: {line_left}")
 
-            arc_radius = (arc_bottom - arc_mid)
-            arc_right = arc_left + arc_radius
+            arc_radius = round((arc_bottom - arc_mid), PRECISION)
+            arc_right = round(arc_left + arc_radius, PRECISION)
             debug(f"arc_left: {arc_left}, arc_right: {arc_right}, arc_radius: {arc_radius}, pad_left: {pad_left}")
 
             if arc_mid >= pad_top and arc_mid <= pad_bottom and arc_right > pad_left:
-                offset = pad_left - arc_right
+                offset = round(pad_left - arc_right, PRECISION)
 
-            elif arc_mid < pad_top and (arc_left >= pad_left or distance((arc_left, arc_mid), (pad_left, pad_top)) < arc_radius):
-                deltay = pad_top - arc_mid
-                new_left = pad_left - sqrt(arc_radius*arc_radius - deltay*deltay)
-                offset = new_left - arc_left
+            elif arc_mid < pad_top and arc_bottom > pad_top and (arc_left >= pad_left or distance((arc_left, arc_mid), (pad_left, pad_top)) < arc_radius):
+                deltay = round(pad_top - arc_mid, PRECISION)
+                new_left = round(pad_left - sqrt(arc_radius*arc_radius - deltay*deltay), PRECISION)
+                offset = round(new_left - arc_left, PRECISION)
             
-            elif arc_mid > pad_bottom and (arc_left >= pad_left or distance((arc_left, arc_mid), (pad_left, pad_bottom)) < arc_radius):
-                deltay = arc_mid - pad_bottom
-                new_left = pad_left - sqrt(arc_radius*arc_radius - deltay*deltay)
-                offset = new_left - arc_left
+            elif arc_mid > pad_bottom and arc_top < pad_bottom and (arc_left >= pad_left or distance((arc_left, arc_mid), (pad_left, pad_bottom)) < arc_radius):
+                deltay = round(arc_mid - pad_bottom, PRECISION)
+                new_left = round(pad_left - sqrt(arc_radius*arc_radius - deltay*deltay), PRECISION)
+                offset = round(new_left - arc_left, PRECISION)
 
         else:
             line_right = max(inl.start_point[0], inl.end_point[0], out.start_point[0], out.end_point[0])
+
+            # TODO: Incomplete case!
 
         debug(f"offset: {offset}")
         if offset != 0:
@@ -450,12 +455,12 @@ class TrackRouter(ABC):
 
         # Determine if the arc segment is completely above the pad
         width = arc.width
-        arc_left = min(arc.start_point[0], arc.end_point[0]) - width/2
-        arc_right = max(arc.start_point[0], arc.end_point[0]) + width/2
-        arc_mid = (arc_left + arc_right) / 2
+        arc_left = round(min(arc.start_point[0], arc.end_point[0]) - width/2, PRECISION)
+        arc_right = round(max(arc.start_point[0], arc.end_point[0]) + width/2, PRECISION)
+        arc_mid = round((arc_left + arc_right) / 2, PRECISION)
 
-        pad_left = pad.clear_left() * 1e-6
-        pad_right = pad.clear_right() * 1e-6
+        pad_left = round(pad.clear_left() * 1e-6, PRECISION)
+        pad_right = round(pad.clear_right() * 1e-6, PRECISION)
         offset = 0
 
         debug(f"arc_left: {arc_left}, arc_right: {arc_right}, arc_mid: {arc_mid}, pad_left: {pad_left}, pad_right: {pad_right}")
@@ -464,64 +469,64 @@ class TrackRouter(ABC):
         if not overlap(arc_left, arc_right, pad_left, pad_right):
             return
 
-        pad_top = pad.clear_top() * 1e-6
-        pad_bottom = pad.clear_bottom() * 1e-6
+        pad_top = round(pad.clear_top() * 1e-6, PRECISION)
+        pad_bottom = round(pad.clear_bottom() * 1e-6, PRECISION)
 
         # Determine direction of the arc segment - Bottom side arcs
         if arc.start_point[1] < arc.mid_point[1]:
-            line_top = min(inl.start_point[1], inl.end_point[1], out.start_point[1], out.end_point[1])
+            line_top = round(min(inl.start_point[1], inl.end_point[1], out.start_point[1], out.end_point[1]), PRECISION)
 
-            arc_top = arc.start_point[1]
+            arc_top = round(arc.start_point[1], PRECISION)
             # Skip this if the pad is closer to the other end of the lines
             if (pad_top - line_top) < (arc_top - pad_bottom):
                 return
 
-            arc_radius = (arc_right - arc_mid)
-            arc_bottom = arc_top + arc_radius
+            arc_radius = round((arc_right - arc_mid), PRECISION)
+            arc_bottom = round(arc_top + arc_radius, PRECISION)
 
             debug(f"arc_top: {arc_top}, arc_bottom: {arc_bottom}, arc_radius: {arc_radius}, pad_top: {pad_top}")
 
             if arc_mid >= pad_left and arc_mid <= pad_right and arc_bottom > pad_top:
-                offset = pad_top - arc_bottom
+                offset = round(pad_top - arc_bottom, PRECISION)
 
-            elif arc_mid < pad_left and (arc_top >= pad_top or distance((arc_top, arc_mid), (pad_left, pad_top)) < arc_radius):
-                deltax = pad_left - arc_mid
+            elif arc_mid < pad_left and arc_right > pad_left and (arc_top >= pad_top or distance((arc_top, arc_mid), (pad_left, pad_top)) < arc_radius):
+                deltax = round(pad_left - arc_mid, PRECISION)
                 debug(f"deltax: {deltax}")
-                new_top = pad_top - sqrt(arc_radius*arc_radius - deltax*deltax)
-                offset = new_top - arc_top
+                new_top = round(pad_top - sqrt(arc_radius*arc_radius - deltax*deltax), PRECISION)
+                offset = round(new_top - arc_top, PRECISION)
 
-            elif arc_mid > pad_right and (arc_top >= pad_top or distance((arc_top, arc_mid), (pad_right, pad_top)) < arc_radius):
-                deltax = arc_mid - pad_right
+            elif arc_mid > pad_right and arc_left < pad_right and (arc_top >= pad_top or distance((arc_top, arc_mid), (pad_right, pad_top)) < arc_radius):
+                deltax = round(arc_mid - pad_right, PRECISION)
                 debug(f"deltax: {deltax}")
-                new_top = pad_top - sqrt(arc_radius*arc_radius - deltax*deltax)
-                offset = new_top - arc_top
+                new_top = round(pad_top - sqrt(arc_radius*arc_radius - deltax*deltax), PRECISION)
+                offset = round(new_top - arc_top, PRECISION)
 
         # Else top side arcs
         else:
-            line_bottom = max(inl.start_point[1], inl.end_point[1], out.start_point[1], out.end_point[1])
-            arc_bottom = arc.start_point[1]
+            line_bottom = round(max(inl.start_point[1], inl.end_point[1], out.start_point[1], out.end_point[1]), PRECISION)
+            arc_bottom = round(arc.start_point[1], PRECISION)
             # Skip this if the pad is closer to the other end of the lines
             debug(f"pad_bottom: {pad_bottom}, line_bottom: {line_bottom}, arc_bottom: {arc_bottom}, pad_top: {pad_top}")
             if (pad_bottom - line_bottom) > (arc_bottom - pad_top):
                 return
 
-            arc_radius = (arc_right - arc_mid)
-            arc_top = arc_bottom - arc_radius
+            arc_radius = round((arc_right - arc_mid), PRECISION)
+            arc_top = round(arc_bottom - arc_radius, PRECISION)
             debug(f"arc_bottom: {arc_bottom}, arc_top: {arc_top}, arc_radius: {arc_radius}, pad_bottom: {pad_bottom}")
 
             if arc_mid >= pad_left and arc_mid <= pad_right and arc_top < pad_bottom:
-                offset = pad_bottom - arc_top
+                offset = round(pad_bottom - arc_top, PRECISION)
 
-            elif arc_mid < pad_left and (arc_bottom <= pad_bottom or distance((arc_bottom, arc_mid), (pad_bottom, pad_left)) < arc_radius):
-                deltax = pad_left - arc_mid
-                debug(f"deltax: {deltax}")
-                new_bottom = pad_bottom + sqrt(arc_radius*arc_radius - deltax*deltax)
-                offset = new_bottom - arc_bottom
+            elif arc_mid < pad_left and arc_right > pad_left and (arc_bottom <= pad_bottom or distance((arc_mid, arc_bottom), (pad_left, pad_bottom)) < arc_radius):
+                deltax = round(pad_left - arc_mid, PRECISION)
+                debug(f"deltax: {deltax}, arc_mid: {arc_mid:.6f}, pad_left: {pad_left:.6f}, arc_bottom: {arc_bottom:.6f}, pad_bottom: {pad_bottom:.6f}, arc_radius: {arc_radius:.6f}, distance: {distance((arc_mid, arc_bottom), (pad_left, pad_bottom)):.6f}")
+                new_bottom = round(pad_bottom + sqrt(arc_radius*arc_radius - deltax*deltax), PRECISION)
+                offset = round(new_bottom - arc_bottom, PRECISION)
 
-            elif arc_mid > pad_right and (arc_bottom <= pad_bottom or distance((arc_bottom, arc_mid), (pad_right, pad_bottom)) < arc_radius):
-                deltax = arc_mid - pad_right
-                debug(f"deltax: {deltax}")
-                new_bottom = pad_bottom + sqrt(arc_radius*arc_radius - deltax*deltax)
+            elif arc_mid > pad_right and arc_left < pad_right and (arc_bottom <= pad_bottom or distance((arc_mid, arc_bottom), (pad_right, pad_bottom)) < arc_radius):
+                deltax = round(arc_mid - pad_right, PRECISION)
+                debug(f"deltax: {deltax}, arc_mid: {arc_mid:.6f}, pad_right: {pad_right:.6f}, arc_bottom: {arc_bottom:.6f}, pad_bottom: {pad_bottom:.6f}, arc_radius: {arc_radius:.6f}, distance: {distance((arc_mid, arc_bottom), (pad_right, pad_bottom)):.6f}")
+                new_bottom = round(pad_bottom + sqrt(arc_radius*arc_radius - deltax*deltax), PRECISION)
                 offset = new_bottom - arc_bottom
 
         if offset != 0:
@@ -574,6 +579,61 @@ class TrackRouter(ABC):
                 ddy = y/1e6 - t.start_point[1]
                 self.shorten_track_pair(tracks, i, fabs(ddy));
 
+    def arc_centre(self, arc: ArcSegment) -> Tuple[float, float]:
+        """
+        Calculate the centre of an arc segment.
+        """
+        sx = arc.start_point[0]
+        sy = arc.start_point[1]
+        ex = arc.end_point[0]
+        ey = arc.end_point[1]
+        mx = arc.mid_point[0]
+        my = arc.mid_point[1]
+        D = 2 * (sx * (my - ey) + mx * (ey - sy) + ex * (sy - my))
+        if D == 0:
+            raise ValueError(f"Invalid arc: the three points form a straight line: start=({sx}, {sy}), mid=({mx}, {my}), end=({ex}, {ey})")
+
+        sm = sx*sx + sy*sy
+        mm = mx*mx + my*my
+        em = ex*ex + ey*ey
+
+        cx = round((sm*(my-ey) + mm*(ey-sy) + em*(sy-my)) / D, PRECISION)
+        cy = round((sm*(ex-mx) + mm*(sx-ex) + em*(mx-sx)) / D, PRECISION)
+
+        return (cx, cy)
+
+    def closest_arc(self, tracks: List[TraceSegment], point: Tuple[float, float]) -> int:
+        """
+        Find the index of the closest arc segment to a given point.
+
+        This method only considered arcs where the arc is closer to the reference pointthan its centre.
+
+        Closest is evaluated based on the distance from the reference point to the arc's centre.
+        """
+        closest = None
+        closest_distance = float('inf')
+
+        for i in range(len(tracks)):
+            if type(tracks[i]) != ArcSegment:
+                continue
+
+            t = tracks[i]
+            
+            centre = self.arc_centre(t)
+
+            d_cp = distance(point, centre)
+            d_mp = distance(point, t.mid_point)
+
+            # Only consider arcs where the arc is closer to the reference point than the centre
+            if d_mp > d_cp:
+                continue
+
+            if d_cp < closest_distance:
+                closest = i
+                closest_distance = d_cp
+
+        return closest
+
     def shorten_track_pair(self, list: List[TraceSegment], index: int, offset: float):
         """
         Shorten a pair of tracks in a serpentine track to avoid an obstacle.
@@ -596,9 +656,15 @@ class TrackRouter(ABC):
         if arc.start_point[1] < arc.mid_point[1]:
             offset = -offset
 
-        arc.move((0, offset))
-        inl.move_end((0, offset))
-        out.move_start((0, offset))
+        # Determine axial direction
+        if abs(arc.start_point[0] - arc.end_point[0]) < 1e-9:
+            arc.move((offset, 0))
+            inl.move_end((offset, 0))
+            out.move_start((offset, 0))
+        else:
+            arc.move((0, offset))
+            inl.move_end((0, offset))
+            out.move_start((0, offset))
 
     def corner_90(self, start: Tuple[float, float], end: Tuple[float, float], scale: float = 1.0) -> TraceSegment:
         """
