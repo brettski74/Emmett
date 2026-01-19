@@ -19,6 +19,7 @@ from .my_debug import debug, stringify, enable_debug, stringify
 
 KICAD_UNITS = 1e-9
 KICAD_MM = 1e-6
+PRECISION = 9
 
 class BoardAnalyzer:
     """
@@ -74,9 +75,12 @@ class BoardAnalyzer:
         right = float('-inf')
         bottom = float('-inf')
 
+        enable_debug(True)
+
         drawings = self.board.GetDrawings()
         for d in drawings:
             if isinstance(d, pcbnew.PCB_SHAPE):
+                debug(f"shape type: {d.ShowShape()}")
                 if d.ShowShape() == "Line":
                     if d.GetLayer() == pcbnew.Edge_Cuts:
                         if d.GetStartX() < left:
@@ -101,6 +105,60 @@ class BoardAnalyzer:
 
         return (left * units, top * units, right * units, bottom * units)
     
+    def calculate_board_margin(self, extents: Tuple[float, float, float, float]) -> float:
+        """
+        Determine the board margin that appears to have been used for the current board layout.
+
+        This method scans through all of the traces on the board and compares how close to the edges of
+        the board they lie. The closest trace to the edge is taken as the board margin. The answer will
+        be rounded to the nearest nanometre to help avoid issues caused by rounding errors in floating
+        point numbers.
+        """
+
+        left, top, right, bottom = extents
+        margin = float('inf')
+        enable_debug(True)
+
+        tracks = self.board.GetTracks()
+        for track in tracks:
+            start = track.GetStart()
+            end = track.GetEnd()
+            half_width = track.GetWidth() / 2 * KICAD_MM
+
+            sx = start.x * KICAD_MM
+            sy = start.y * KICAD_MM
+            ex = end.x * KICAD_MM
+            ey = end.y * KICAD_MM
+
+            debug(f"start: {sx}, {sy}, end: {ex}, {ey}, margin: {margin}, extents: {left}, {top}, {right}, {bottom}")
+            margin = min(
+                margin,
+                sx - left,
+                right - sx,
+                sy - top,
+                bottom - sy,
+                ex - left,
+                right - ex,
+                ey - top,
+                bottom - ey,
+            )
+
+            if isinstance(track, pcbnew.PCB_ARC):
+                mid = track.GetMid()
+                mx = mid.x * KICAD_MM
+                my = mid.y * KICAD_MM
+                debug(f"mid: {mx}, {my}, margin: {margin}, extents: {left}, {top}, {right}, {bottom}")
+                margin = min(
+                    margin,
+                    mx - left,
+                    right - mx,
+                    my - top,
+                    bottom - my,
+                )
+
+        return round(margin - half_width, PRECISION)
+                
+
     def get_closest_pad(self, point: Tuple[float, float], layer: str, units: float = KICAD_UNITS) -> RectangularPad:
         """
         Get the closest pad to a point.

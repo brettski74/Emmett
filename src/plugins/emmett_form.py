@@ -86,7 +86,9 @@ class EmmettForm(EmmettDialog):
         self.thermal_resistance_value = ""
         self.power_margin_value = ""
         self.target_resistance_value = ""
+        self.board_margin_value = ""
 
+        # Required to set the self.router value
         self.layoutChange(None)
 
         self.click_analyze_button(None)
@@ -128,9 +130,11 @@ Requires:
   * 4 M3 mounting holes near the corners of the board.
 """.strip()
         else:
-            self.router = None
             description = "Unknown layout. Please excuse the crudity of this description. I didn't have time to research the details or write it."
         
+        if self.board_margin_value and self.router is not None:
+            self.router.margin = float(self.board_margin_value) * 1000
+
         self.layoutDescription.ChangeValue(description)
 
     def click_clear_button(self, event):
@@ -207,6 +211,7 @@ Requires:
 
         self.calculate_cold_current()
 
+        
     def click_resize_button(self, event):
         # We will work in microns and round to the nearest micron before applying to the board.
         # Get the centre point in microns
@@ -304,6 +309,13 @@ Requires:
             self.extent_bottom_value = fset(self.extent_bottom, bottom)
             self.extent_width_value = fset(self.extent_width, right - left)
             self.extent_height_value = fset(self.extent_height, bottom - top)
+
+            enable_debug(True)
+            debug(f"extents: {left}, {top}, {right}, {bottom}")
+            margin = self.analyzer.calculate_board_margin((left, top, right, bottom))
+            debug(f"margin: {margin}")
+            self.board_margin_value = fset(self.boardMargin, margin)
+            self.board_margin_leave(None)
 
             board_text = self.analyzer.parse_board_text()
 
@@ -430,6 +442,15 @@ Requires:
             newValue = fsub(self.track_pitch, self.track_width)
             self.track_spacing.ChangeValue(newValue)
             self.track_spacing_value = newValue
+
+    def board_margin_leave(self, event):
+        newValue = field_normalize(self.boardMargin)
+        debug(f"board_margin_leave: {newValue}")
+        if newValue == self.board_margin_value:
+            return
+
+        self.board_margin_value = newValue
+        self.router.margin = float(newValue) * 1000
 
     def track_spacing_enter(self, event):
         self.track_spacing_leave(event)

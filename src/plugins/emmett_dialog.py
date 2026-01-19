@@ -234,7 +234,7 @@ class EmmettDialog ( wx.Dialog ):
 
         sbTrackGeometry = wx.StaticBoxSizer( wx.StaticBox( self.m_calculationPanel, wx.ID_ANY, u"Track Geometry" ), wx.VERTICAL )
 
-        fgTrackGeometry = wx.FlexGridSizer( 0, 6, 0, 0 )
+        fgTrackGeometry = wx.FlexGridSizer( 0, 8, 0, 0 )
         fgTrackGeometry.SetFlexibleDirection( wx.BOTH )
         fgTrackGeometry.SetNonFlexibleGrowMode( wx.FLEX_GROWMODE_SPECIFIED )
 
@@ -267,6 +267,14 @@ class EmmettDialog ( wx.Dialog ):
         self.track_pitch.SetToolTip( u"The centre-centre distance in mm between adjacent tracks." )
 
         fgTrackGeometry.Add( self.track_pitch, 0, wx.ALL, 5 )
+
+        self.m_BoardMargin = wx.StaticText( sbTrackGeometry.GetStaticBox(), wx.ID_ANY, u"Board Margin:", wx.DefaultPosition, wx.DefaultSize, 0 )
+        self.m_BoardMargin.Wrap( -1 )
+
+        fgTrackGeometry.Add( self.m_BoardMargin, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALIGN_RIGHT|wx.ALL, 5 )
+
+        self.boardMargin = wx.TextCtrl( sbTrackGeometry.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, wx.TE_CENTER|wx.TE_LEFT|wx.TE_PROCESS_ENTER )
+        fgTrackGeometry.Add( self.boardMargin, 0, wx.ALIGN_CENTER_HORIZONTAL|wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5 )
 
 
         sbTrackGeometry.Add( fgTrackGeometry, 1, wx.EXPAND, 5 )
@@ -432,7 +440,7 @@ class EmmettDialog ( wx.Dialog ):
         self.m_calculationPanel.SetSizer( bCalculationPanel )
         self.m_calculationPanel.Layout()
         bCalculationPanel.Fit( self.m_calculationPanel )
-        self.m_main_notebook.AddPage( self.m_calculationPanel, u"Calculations", False )
+        self.m_main_notebook.AddPage( self.m_calculationPanel, u"Calculations", True )
         self.m_layoutPanel = wx.Panel( self.m_main_notebook, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, wx.TAB_TRAVERSAL )
         bLayout = wx.BoxSizer( wx.VERTICAL )
 
@@ -444,7 +452,7 @@ class EmmettDialog ( wx.Dialog ):
 
         bLayoutList.Add( self.m_Layout, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5 )
 
-        layoutChoices = [ u"Bootstrappable", u"Continuous" ]
+        layoutChoices = [ u"Bootstrappable", u"Continuous", u"Great Scott!" ]
         self.layout = wx.Choice( self.m_layoutPanel, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, layoutChoices, wx.CB_SORT )
         self.layout.SetSelection( 0 )
         bLayoutList.Add( self.layout, 0, wx.ALL, 5 )
@@ -463,7 +471,7 @@ class EmmettDialog ( wx.Dialog ):
         self.m_layoutPanel.SetSizer( bLayout )
         self.m_layoutPanel.Layout()
         bLayout.Fit( self.m_layoutPanel )
-        self.m_main_notebook.AddPage( self.m_layoutPanel, u"Layout", True )
+        self.m_main_notebook.AddPage( self.m_layoutPanel, u"Layout", False )
 
         bSizer3.Add( self.m_main_notebook, 1, wx.EXPAND |wx.ALL, 5 )
 
@@ -571,6 +579,7 @@ class EmmettDialog ( wx.Dialog ):
         self.track_pitch.Bind( wx.EVT_KILL_FOCUS, self.track_pitch_leave )
         self.track_pitch.Bind( wx.EVT_TEXT, self.track_pitch_change )
         self.track_pitch.Bind( wx.EVT_TEXT_ENTER, self.track_pitch_enter )
+        self.boardMargin.Bind( wx.EVT_KILL_FOCUS, self.board_margin_leave )
         self.resize_button.Bind( wx.EVT_BUTTON, self.click_resize_button )
         self.layout.Bind( wx.EVT_CHOICE, self.layoutChange )
         self.analyze_button.Bind( wx.EVT_BUTTON, self.click_analyze_button )
@@ -695,6 +704,9 @@ class EmmettDialog ( wx.Dialog ):
         event.Skip()
 
     def track_pitch_enter( self, event ):
+        event.Skip()
+
+    def board_margin_leave( self, event ):
         event.Skip()
 
     def click_resize_button( self, event ):
