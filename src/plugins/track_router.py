@@ -109,12 +109,29 @@ class TrackRouter(ABC):
         """
         pass
     
-    @abstractmethod
-    def starting_track_count(self) -> Tuple[int, float]:
+    def working_width(self, spacing: Optional[float] = None, margin: Optional[float] = None ) -> float:
         """
-        Get the minimum number of tracks that is even and wider than the specified distance.
+        Get the working width of the board - the width across which a serpentine track with the current track pitch and spacing can fit.
         """
-        pass
+        if spacing is None:
+            spacing = self.spacing
+        if margin is None:
+            margin = self.margin
+        return self.right - self.left - 2*margin + spacing
+
+    def starting_track_count(self, spacing: Optional[float] = None, margin: Optional[float] = None) -> int:
+        """
+        Get a low number of tracks to start at for track optimization.
+        """
+        working_width = self.working_width(spacing, margin)
+        maximum_pitch = self.maximum_track_pitch()
+        return 2 * floor(working_width / maximum_pitch)
+
+    def maximum_track_pitch(self) -> int:
+        """
+        Return the maximum track pitch to assume when optimizing tracks in microns.
+        """
+        return 8000
 
     @abstractmethod
     def update_board(self, builder: BoardBuilder) -> List[TraceSegment]:
@@ -291,22 +308,24 @@ class TrackRouter(ABC):
         save_pitch = self.pitch
         save_width = self.width
         save_spacing = self.spacing
+        enable_debug(True)
 
         self.spacing = minimum_spacing
-        track_count, working_width = self.starting_track_count()
-        debug(f"starting track count: {track_count}, working width: {working_width}, minimum spacing: {minimum_spacing}")
+        track_count = self.starting_track_count(self.spacing, self.margin)
+        debug(f"starting track count: {track_count}, spacing: {self.spacing}, margin: {self.margin}, minimum spacing: {minimum_spacing}")
 
         resistance = 0
         last_tracks = None
         rlo = 0
 
         while resistance < target_resistance:
+            working_width = self.working_width(self.spacing, self.margin)
             self.pitch = working_width / track_count
             self.width = self.pitch - self.spacing
 
             tracks = self.generate_tracks()
             resistance = self.factory.calculate_total_resistance(tracks, target_temperature)
-            debug(f"track_count: {track_count}, pitch: {self.pitch}, width: {self.width}, resistance: {resistance}")
+            debug(f"track_count: {track_count}, working_width: {working_width}, pitch: {self.pitch}, width: {self.width}, resistance: {resistance}")
 
             if resistance > target_resistance:
                 track_count = self.decrement_track_count(track_count)
@@ -330,33 +349,12 @@ class TrackRouter(ABC):
             self.spacing = save_spacing
             raise ValueError(f"No high bracket found for target resistance of {target_resistance} ohms")
 
-        resistance = self.finish_optimization(target_resistance, target_temperature, working_width/track_count - 10, minimum_spacing)
+        resistance = self.finish_optimization(target_resistance, target_temperature, self.working_width(self.spacing, self.margin)/track_count - 10, minimum_spacing)
         pitch = self.pitch
         width = self.width
         error = fabs(resistance - target_resistance)
         debug(f"count: {track_count}, width: {width}, resistance: {resistance}, error: {error}")
 
-        # Sometimes we struggle to get close enough to the target resistance at the highest possible track count, so try a
-        # a couple of lower counts to see if we can get closer.
-        track_count = self.decrement_track_count(track_count)
-        r2 = self.finish_optimization(target_resistance, target_temperature, working_width/track_count - 10, minimum_spacing)
-        err2 = fabs(r2 - target_resistance)
-        debug(f"count: {track_count}, width: {width}, resistance: {r2}, error: {err2}")
-        if err2 < error:
-            pitch = self.pitch
-            width = self.width
-            resistance = r2
-            error = err2
-        debug(f"width: {width}, resistance: {resistance}, error: {error}")
-
-        track_count = self.decrement_track_count(track_count)
-        r2 = self.finish_optimization(target_resistance, target_temperature, working_width/track_count - 10, minimum_spacing)
-        debug(f"count: {track_count}, width: {width}, resistance: {r2}, error: {err2}")
-        if fabs(r2 - target_resistance) < (resistance - target_resistance):
-            pitch = self.pitch
-            width = self.width
-            resistance = r2
-            error = err2
         debug(f"width: {width}, resistance: {resistance}, error: {error}")
 
         self.pitch = pitch
@@ -386,8 +384,6 @@ class TrackRouter(ABC):
         arc = tracks[index]
         out = tracks[index+1]
 
-        enable_debug(True)
-
         # Determine if the arc segment is completely above the pad
         width = arc.width
         arc_top = round(min(arc.start_point[1], arc.end_point[1]) - width/2, PRECISION)
@@ -397,8 +393,6 @@ class TrackRouter(ABC):
         pad_top = round(pad.clear_top() * 1e-6, PRECISION)
         pad_bottom = round(pad.clear_bottom() * 1e-6, PRECISION)
         offset = 0
-
-        debug(f"arc_top: {arc_top}, arc_bottom: {arc_bottom}, arc_mid: {arc_mid}, pad_top: {pad_top}, pad_bottom: {pad_bottom}")
 
         # No vertical overlap, nothing to do
         if not overlap(arc_top, arc_bottom, pad_top, pad_bottom):
@@ -416,11 +410,8 @@ class TrackRouter(ABC):
             if (pad_left - line_left) < (arc_left - pad_right):
                 return
 
-            debug(f"pad_left: {pad_left}, pad_right: {pad_right}, line_left: {line_left}")
-
             arc_radius = round((arc_bottom - arc_mid), PRECISION)
             arc_right = round(arc_left + arc_radius, PRECISION)
-            debug(f"arc_left: {arc_left}, arc_right: {arc_right}, arc_radius: {arc_radius}, pad_left: {pad_left}")
 
             if arc_mid >= pad_top and arc_mid <= pad_bottom and arc_right > pad_left:
                 offset = round(pad_left - arc_right, PRECISION)
@@ -440,7 +431,6 @@ class TrackRouter(ABC):
 
             # TODO: Incomplete case!
 
-        debug(f"offset: {offset}")
         if offset != 0:
             arc.move((offset, 0))
             inl.move_end((offset, 0))
@@ -463,8 +453,6 @@ class TrackRouter(ABC):
         pad_right = round(pad.clear_right() * 1e-6, PRECISION)
         offset = 0
 
-        debug(f"arc_left: {arc_left}, arc_right: {arc_right}, arc_mid: {arc_mid}, pad_left: {pad_left}, pad_right: {pad_right}")
-
         # No horizontal overlap, nothing to do
         if not overlap(arc_left, arc_right, pad_left, pad_right):
             return
@@ -484,20 +472,16 @@ class TrackRouter(ABC):
             arc_radius = round((arc_right - arc_mid), PRECISION)
             arc_bottom = round(arc_top + arc_radius, PRECISION)
 
-            debug(f"arc_top: {arc_top}, arc_bottom: {arc_bottom}, arc_radius: {arc_radius}, pad_top: {pad_top}")
-
             if arc_mid >= pad_left and arc_mid <= pad_right and arc_bottom > pad_top:
                 offset = round(pad_top - arc_bottom, PRECISION)
 
             elif arc_mid < pad_left and arc_right > pad_left and (arc_top >= pad_top or distance((arc_top, arc_mid), (pad_left, pad_top)) < arc_radius):
                 deltax = round(pad_left - arc_mid, PRECISION)
-                debug(f"deltax: {deltax}")
                 new_top = round(pad_top - sqrt(arc_radius*arc_radius - deltax*deltax), PRECISION)
                 offset = round(new_top - arc_top, PRECISION)
 
             elif arc_mid > pad_right and arc_left < pad_right and (arc_top >= pad_top or distance((arc_top, arc_mid), (pad_right, pad_top)) < arc_radius):
                 deltax = round(arc_mid - pad_right, PRECISION)
-                debug(f"deltax: {deltax}")
                 new_top = round(pad_top - sqrt(arc_radius*arc_radius - deltax*deltax), PRECISION)
                 offset = round(new_top - arc_top, PRECISION)
 
@@ -506,31 +490,26 @@ class TrackRouter(ABC):
             line_bottom = round(max(inl.start_point[1], inl.end_point[1], out.start_point[1], out.end_point[1]), PRECISION)
             arc_bottom = round(arc.start_point[1], PRECISION)
             # Skip this if the pad is closer to the other end of the lines
-            debug(f"pad_bottom: {pad_bottom}, line_bottom: {line_bottom}, arc_bottom: {arc_bottom}, pad_top: {pad_top}")
             if (pad_bottom - line_bottom) > (arc_bottom - pad_top):
                 return
 
             arc_radius = round((arc_right - arc_mid), PRECISION)
             arc_top = round(arc_bottom - arc_radius, PRECISION)
-            debug(f"arc_bottom: {arc_bottom}, arc_top: {arc_top}, arc_radius: {arc_radius}, pad_bottom: {pad_bottom}")
 
             if arc_mid >= pad_left and arc_mid <= pad_right and arc_top < pad_bottom:
                 offset = round(pad_bottom - arc_top, PRECISION)
 
             elif arc_mid < pad_left and arc_right > pad_left and (arc_bottom <= pad_bottom or distance((arc_mid, arc_bottom), (pad_left, pad_bottom)) < arc_radius):
                 deltax = round(pad_left - arc_mid, PRECISION)
-                debug(f"deltax: {deltax}, arc_mid: {arc_mid:.6f}, pad_left: {pad_left:.6f}, arc_bottom: {arc_bottom:.6f}, pad_bottom: {pad_bottom:.6f}, arc_radius: {arc_radius:.6f}, distance: {distance((arc_mid, arc_bottom), (pad_left, pad_bottom)):.6f}")
                 new_bottom = round(pad_bottom + sqrt(arc_radius*arc_radius - deltax*deltax), PRECISION)
                 offset = round(new_bottom - arc_bottom, PRECISION)
 
             elif arc_mid > pad_right and arc_left < pad_right and (arc_bottom <= pad_bottom or distance((arc_mid, arc_bottom), (pad_right, pad_bottom)) < arc_radius):
                 deltax = round(arc_mid - pad_right, PRECISION)
-                debug(f"deltax: {deltax}, arc_mid: {arc_mid:.6f}, pad_right: {pad_right:.6f}, arc_bottom: {arc_bottom:.6f}, pad_bottom: {pad_bottom:.6f}, arc_radius: {arc_radius:.6f}, distance: {distance((arc_mid, arc_bottom), (pad_right, pad_bottom)):.6f}")
                 new_bottom = round(pad_bottom + sqrt(arc_radius*arc_radius - deltax*deltax), PRECISION)
                 offset = new_bottom - arc_bottom
 
         if offset != 0:
-            debug(f"offset: {offset}")
             arc.move((0, offset))
             inl.move_end((0, offset))
             out.move_start((0, offset))
@@ -672,14 +651,12 @@ class TrackRouter(ABC):
         """
         start = scale_vec(start, scale)
         end = scale_vec(end, scale)
-        debug(f"start: {start}, end: {end}")
 
         deltax = end[0] - start[0]
         deltay = end[1] - start[1]
         quadrant = deltax * deltay
 
         if abs(deltax) - abs(deltay) > 1e-9:
-            msg  = f"Corner 90: deltax ({deltax:.6f}) and deltay ({deltay:.6f}) are not equal"
             raise ValueError(msg)
 
         if abs(deltax) < 1e-9:
@@ -695,6 +672,8 @@ class TrackRouter(ABC):
     def finish_optimization(self, target_resistance, temperature, pitch, minimum_spacing):
         global TOLERANCE
         depth = 100
+
+        debug(f"finishing optimization: pitch: {pitch}, minimum spacing: {minimum_spacing}, target resistance: {target_resistance}, temperature: {temperature}")
 
         self.pitch = pitch
         self.spacing = minimum_spacing

@@ -470,10 +470,3 @@ class AlTrackRouter(TrackRouter):
 
         return self.generate_left_tracks() + self.generate_right_tracks() + self.generate_fuse_in_tracks() + self.generate_fuse_out_tracks()
 
-    def starting_track_count(self) -> int:
-        # Assume that we're never going to have track widths greater than 2.5mm (2500um)
-        # The -10 on the end is a hedge against rounding errors - hopefully enough!
-        working_width = self.right - self.left - 2*self.margin + self.spacing - 10
-        debug(f"working width: {working_width}, left: {self.left}, right: {self.right}, margin: {self.margin}, spacing: {self.spacing}")
-        return (2 * floor(working_width / 5000), working_width)
-

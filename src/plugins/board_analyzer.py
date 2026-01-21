@@ -11,6 +11,7 @@ from math import fabs
 import wx
 import pcbnew
 import re
+from math import sqrt
 from typing import List, Tuple, Optional, Union
 from .trace_segment_factory import TraceSegmentFactory, TraceSegment, LinearSegment, ArcSegment
 from .pad_defs import RectangularPad, CircularPad
@@ -20,6 +21,12 @@ from .my_debug import debug, stringify, enable_debug, stringify
 KICAD_UNITS = 1e-9
 KICAD_MM = 1e-6
 PRECISION = 9
+
+def int_distance(a: pcbnew.VECTOR2I, b: Tuple[int, int]) -> float:
+    dx = a.x - b[0]
+    dy = a.y - b[1]
+
+    return sqrt(dx*dx + dy*dy)
 
 class BoardAnalyzer:
     """
@@ -65,6 +72,86 @@ class BoardAnalyzer:
                     txt = r.sub("", txt)
 
         return result
+
+    def rect_distance(self, rect: pcbnew.PCB_SHAPE, point: Tuple[float, float]) -> float:
+        """
+        Calculate the distance between a rectangle and a point.
+        """
+        topLeft = rect.GetTopLeft()
+        bottomRight = rect.GetBotRight()
+
+        left = topLeft.x * KICAD_MM
+        top = topLeft.y * KICAD_MM
+        right = bottomRight.x * KICAD_MM
+        bottom = bottomRight.y * KICAD_MM
+
+        # Check if inside the x coordinate range of the rectangle
+        if point[0] >= left and point[0] <= right:
+            # Check if inside the rectabngle
+            if point[1] >= top and point[1] <= bottom:
+                return 0
+            else:
+                # Return the minimum delta Y between either top or bottom to the reference point
+                return min(abs(point[1] - top), abs(point[1]-bottom))
+        
+        # Check if inside the y-coordinate range of the rectangle, but outside the x-coordinate range
+        elif point[1] >= top and point[1] <= bottom:
+            # Return the minimum delta X between either left or right to the reference point
+            return min(abs(point[0] - left), abs(point[0]-right))
+
+        # Otherwise, return the minimum distance to the reference point from any of the 4 corners of the rectangle
+        return min(
+            distance(point, (left, top)),
+            distance(point, (right, top)),
+            distance(point, (left, bottom)),
+            distance(point, (right, bottom))
+        )
+
+    def find_closest_mask(self, point: Tuple[float, float]) -> pcbnew.PCB_SHAPE:
+        """
+        Find the rectangle on the front mask layer closest to a given point.
+        """
+        closest = None
+        closest_distance = float('inf')
+
+        drawings = self.board.GetDrawings()
+        for d in drawings:
+            if isinstance(d, pcbnew.PCB_SHAPE):
+                if d.ShowShape() == "Rect":
+                    if d.GetLayer() == pcbnew.F_Mask:
+                        dist = self.rect_distance(d, point)
+
+                        if dist <= 0:
+                            return d
+                        elif dist < closest_distance:
+                            closest = d
+                            closest_distance = dist
+
+        return closest
+
+    def find_closest_mask_arc(self, point: Tuple[int, int], drawings: Optional[list] = None) -> pcbnew.PCB_SHAPE:
+        """
+        Find the arc on the front mask layer closest to a given mid point.
+        """
+        closest = None
+        closest_distance = float('inf')
+        enable_debug(True)
+
+        if drawings is None:
+            drawings = []
+            drawings.extend(self.board.GetDrawings())
+
+        for d in drawings:
+            if isinstance(d, pcbnew.PCB_SHAPE):
+                debug(f"shape: {d.ShowShape()}")
+                if d.ShowShape() == "Arc" and d.GetLayer() == pcbnew.F_Mask:
+                    distance = int_distance(d.GetArcMid(), point)
+
+                    if distance < closest_distance:
+                        closest = d
+                        closest_distance = distance
+
+        return closest
 
     def get_extents(self, units: float = KICAD_UNITS) -> Tuple[float, float, float, float]:
         """
@@ -117,7 +204,6 @@ class BoardAnalyzer:
 
         left, top, right, bottom = extents
         margin = float('inf')
-        enable_debug(True)
 
         tracks = self.board.GetTracks()
         for track in tracks:
@@ -130,7 +216,6 @@ class BoardAnalyzer:
             ex = end.x * KICAD_MM
             ey = end.y * KICAD_MM
 
-            debug(f"start: {sx}, {sy}, end: {ex}, {ey}, margin: {margin}, extents: {left}, {top}, {right}, {bottom}")
             margin = min(
                 margin,
                 sx - left,
@@ -147,7 +232,6 @@ class BoardAnalyzer:
                 mid = track.GetMid()
                 mx = mid.x * KICAD_MM
                 my = mid.y * KICAD_MM
-                debug(f"mid: {mx}, {my}, margin: {margin}, extents: {left}, {top}, {right}, {bottom}")
                 margin = min(
                     margin,
                     mx - left,

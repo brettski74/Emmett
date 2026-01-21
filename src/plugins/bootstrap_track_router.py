@@ -129,6 +129,7 @@ class BootstrapTrackRouter(TrackRouter):
         Analyze the board and set up the router's parameters.
         """
         left, top, right, bottom = analyzer.get_extents(1)
+        self.analyzer = analyzer
 
         centre = ((left + right) / 2, (top + bottom) / 2)
 
@@ -187,6 +188,7 @@ class BootstrapTrackRouter(TrackRouter):
         # Move the power connections to sit in between tracks
         self.connections[0].sync_position()
         self.connections[1].sync_position()
+        self.create_jumper_mask()
 
         pcbnew.Refresh()
 
@@ -230,6 +232,10 @@ class BootstrapTrackRouter(TrackRouter):
             self.factory,
             -1
         )
+
+        # Arcs in metres, left/centre in microns
+        i = self.closest_arc(second, (self.left * 1e-6, self.centre[1] * 1e-6))
+        self.high_jumper_arc = second[i]
 
         conn_top = self.connections[0].top() + self.width/2
         conn_left = self.connections[0].x
@@ -341,6 +347,10 @@ class BootstrapTrackRouter(TrackRouter):
             1
         )
 
+        # Arcs in metres, left/centre in microns
+        i = self.closest_arc(fourth, (self.left * 1e-6, self.centre[1] * 1e-6))
+        self.low_jumper_arc = fourth[i]
+
         conn_top = self.connections[1].top() + self.width/2
         conn_right = self.connections[1].x
         conn_left = xstart + self.pitch_plus
@@ -429,7 +439,9 @@ class BootstrapTrackRouter(TrackRouter):
         # Needs to be a number == 2 mod 4, so it's even, but splits into two odd halves
         self.split_count = 2 * self.odd_tracks_under(self.fuse[1].bottom() - self.fuse[0].top(), self.pitch * 2)
 
+        # The width of the serpentine tracks in the split regions
         self.split_width = self.split_count * self.pitch
+        
         self.split_top = self.centre[1] - self.pitch * (self.split_count / 2 - 0.5)
         self.split_bottom = self.centre[1] + self.pitch * (self.split_count / 2 - 0.5)
         debug(f"split_count: {self.split_count}, split_top: {self.split_top}, split_bottom: {self.split_bottom}")
@@ -468,25 +480,83 @@ class BootstrapTrackRouter(TrackRouter):
 
         return self.generate_left_tracks() + self.generate_right_tracks()
 
-    def starting_track_count(self) -> int:
-        # Assume that we're never going to have track widths greater than 2.5mm
-        # The -10 on the end is a hedge against rounding errors - hopefully enough!
-        working_width = self.right - self.left - 2*self.margin + self.spacing - 10
-        debug(f"working width: {working_width}, left: {self.left}, right: {self.right}, margin: {self.margin}, spacing: {self.spacing}")
-        return (2 * floor(working_width / 5000) + 2, working_width)
-
-    def increment_track_count(self, count: int) -> int:
+    def create_jumper_mask(self):
         """
-        Increment the track count to the next permissable track count above the provided count.
-
-        The default implementation simply increments the track count by 2.
+        Create and/or move the jumper mask to the appropriate size and position.
         """
-        return count+4
 
-    def decrement_track_count(self, count: int) -> int:
-        """
-        Decrement the track count to the next permissable track count below the provided count.
+        hja = self.high_jumper_arc
+        lja = self.low_jumper_arc
 
-        The default implementation simply decrements the track count by 2.
+        debug(f"high_jumper_arc: {hja.start_point} {hja.mid_point} {hja.end_point}")
+        debug(f"low_jumper_arc: {lja.start_point} {lja.mid_point} {lja.end_point}")
+
+        # Need coordinates in nanometres. arcs are in metres. pitch is in microns
+        hi_point = (int(hja.mid_point[0] * 1e9), int(hja.mid_point[1] * 1e9))
+        lo_point = (int(lja.mid_point[0] * 1e9), int(lja.mid_point[1] * 1e9))
+
+        drawings = []
+        drawings.extend(self.analyzer.board.GetDrawings())
+        hi_mask = self.analyzer.find_closest_mask_arc(hi_point, drawings)
+        if hi_mask is not None:
+            drawings.remove(hi_mask)
+
+        lo_mask = self.analyzer.find_closest_mask_arc(lo_point, drawings)
+
+        hi_start = pcbnew.VECTOR2I(int(hja.start_point[0] * 1e9), int(hja.start_point[1] * 1e9))
+        hi_end = pcbnew.VECTOR2I(int(hja.end_point[0] * 1e9), int(hja.end_point[1] * 1e9))
+        hi_centre = pcbnew.VECTOR2I(int(hja.center[0] * 1e9), int(hja.center[1] * 1e9))
+        hi_mid = pcbnew.VECTOR2I(int(hja.mid_point[0] * 1e9), int(hja.mid_point[1] * 1e9))
+        hi_width = int(hja.width * 1e9) - 260000 # 0.13mm inset from track edge based on JLCPCB capabilities
+
+        lo_start = pcbnew.VECTOR2I(int(lja.start_point[0] * 1e9), int(lja.start_point[1] * 1e9))
+        lo_end = pcbnew.VECTOR2I(int(lja.end_point[0] * 1e9), int(lja.end_point[1] * 1e9))
+        lo_centre = pcbnew.VECTOR2I(int(lja.center[0] * 1e9), int(lja.center[1] * 1e9))
+        lo_mid = pcbnew.VECTOR2I(int(lja.mid_point[0] * 1e9), int(lja.mid_point[1] * 1e9))
+        lo_width = int(lja.width * 1e9) - 260000 # 0.13mm inset from track edge based on JLCPCB capabilities
+
+        if hi_mask is not None:
+            debug(f"hi_mask: {hi_mask.GetStart()} {hi_mask.GetArcMid()} {hi_mask.GetEnd()}, width: {hi_mask.GetWidth()}, thisown: {hi_mask.thisown}, uuid: {hi_mask.m_Uuid}")
+        if lo_mask is not None:
+            debug(f"lo_mask: {lo_mask.GetStart()} {lo_mask.GetArcMid()} {lo_mask.GetEnd()}, width: {lo_mask.GetWidth()}, thisown: {lo_mask.thisown}, uuid: {lo_mask.m_Uuid}")
+
+        if hi_mask is lo_mask:
+            debug(f"High and low jumper masks are the same")
+
+        if hi_mask is None or hi_mask is lo_mask:
+            debug(f"Creating high jumper mask")
+            hi_mask = pcbnew.PCB_SHAPE(self.analyzer.board)
+            hi_mask.SetShape(pcbnew.SHAPE_T_ARC)
+            hi_mask.SetLayer(pcbnew.F_Mask)
+            self.analyzer.board.Add(hi_mask)
+
+        if lo_mask is None:
+            debug(f"Creating low jumper mask")
+            lo_mask = pcbnew.PCB_SHAPE(self.analyzer.board)
+            lo_mask.SetShape(pcbnew.SHAPE_T_ARC)
+            lo_mask.SetLayer(pcbnew.F_Mask)
+            self.analyzer.board.Add(lo_mask)
+
+        self.align_arc_mask(hja, hi_mask)
+
+        debug(f"hi_mask: {hi_mask.GetStart()} {hi_mask.GetArcMid()} {hi_mask.GetEnd()}, width: {hi_mask.GetWidth()}, thisown: {hi_mask.thisown}, uuid: {hi_mask.m_Uuid}")
+        debug(f"lo_mask: {lo_mask.GetStart()} {lo_mask.GetArcMid()} {lo_mask.GetEnd()}, width: {lo_mask.GetWidth()}, thisown: {lo_mask.thisown}, uuid: {lo_mask.m_Uuid}")
+
+        self.align_arc_mask(lja, lo_mask)
+
+    def align_arc_mask(self, arc: ArcSegment, mask: pcbnew.PCB_SHAPE):
         """
-        return count-4
+        Align an arc mask to an arc segment.
+        """
+        arc_mid = pcbnew.VECTOR2I(int(arc.mid_point[0] * 1e9), int(arc.mid_point[1] * 1e9))
+        arc_start = pcbnew.VECTOR2I(int(arc.start_point[0] * 1e9), int(arc.start_point[1] * 1e9))
+        arc_end = pcbnew.VECTOR2I(int(arc.end_point[0] * 1e9), int(arc.end_point[1] * 1e9))
+        arc_centre = pcbnew.VECTOR2I(int(arc.center[0] * 1e9), int(arc.center[1] * 1e9))
+        arc_width = int(arc.width * 1e9) - 260000 # 0.13mm inset from track edge based on JLCPCB capabilities
+        
+        mask.SetStartEnd(arc_start, arc_end)
+        mask.SetCenter(arc_centre)
+        mask.SetWidth(arc_width)
+
+        if distance(mask.GetArcMid(), arc_mid) > 1000:
+            mask.SetStartEnd(arc_end, arc_start)
