@@ -135,7 +135,6 @@ class BoardAnalyzer:
         """
         closest = None
         closest_distance = float('inf')
-        enable_debug(True)
 
         if drawings is None:
             drawings = []
@@ -143,7 +142,6 @@ class BoardAnalyzer:
 
         for d in drawings:
             if isinstance(d, pcbnew.PCB_SHAPE):
-                debug(f"shape: {d.ShowShape()}")
                 if d.ShowShape() == "Arc" and d.GetLayer() == pcbnew.F_Mask:
                     distance = int_distance(d.GetArcMid(), point)
 
@@ -162,12 +160,9 @@ class BoardAnalyzer:
         right = float('-inf')
         bottom = float('-inf')
 
-        enable_debug(True)
-
         drawings = self.board.GetDrawings()
         for d in drawings:
             if isinstance(d, pcbnew.PCB_SHAPE):
-                debug(f"shape type: {d.ShowShape()}")
                 if d.ShowShape() == "Line":
                     if d.GetLayer() == pcbnew.Edge_Cuts:
                         if d.GetStartX() < left:

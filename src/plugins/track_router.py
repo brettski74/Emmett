@@ -27,8 +27,6 @@ MICRONS_TO_M = 1e-6
 MICRONS_TO_MM = 1e-3
 TOLERANCE = 0.00005
 
-enable_debug(True)
-
 def mm(microns):
     if isinstance(microns, tuple):
         return (f"{(microns[0] * MICRONS_TO_MM):.3f}", f"{(microns[1] * MICRONS_TO_MM):.3f}")
@@ -308,11 +306,9 @@ class TrackRouter(ABC):
         save_pitch = self.pitch
         save_width = self.width
         save_spacing = self.spacing
-        enable_debug(True)
 
         self.spacing = minimum_spacing
         track_count = self.starting_track_count(self.spacing, self.margin)
-        debug(f"starting track count: {track_count}, spacing: {self.spacing}, margin: {self.margin}, minimum spacing: {minimum_spacing}")
 
         resistance = 0
         last_tracks = None
@@ -325,7 +321,6 @@ class TrackRouter(ABC):
 
             tracks = self.generate_tracks()
             resistance = self.factory.calculate_total_resistance(tracks, target_temperature)
-            debug(f"track_count: {track_count}, working_width: {working_width}, pitch: {self.pitch}, width: {self.width}, resistance: {resistance}")
 
             if resistance > target_resistance:
                 track_count = self.decrement_track_count(track_count)
@@ -353,9 +348,6 @@ class TrackRouter(ABC):
         pitch = self.pitch
         width = self.width
         error = fabs(resistance - target_resistance)
-        debug(f"count: {track_count}, width: {width}, resistance: {resistance}, error: {error}")
-
-        debug(f"width: {width}, resistance: {resistance}, error: {error}")
 
         self.pitch = pitch
         self.width = width
@@ -440,8 +432,6 @@ class TrackRouter(ABC):
         inl = tracks[index-1]
         arc = tracks[index]
         out = tracks[index+1]
-
-        enable_debug(True)
 
         # Determine if the arc segment is completely above the pad
         width = arc.width
@@ -673,8 +663,6 @@ class TrackRouter(ABC):
         global TOLERANCE
         depth = 100
 
-        debug(f"finishing optimization: pitch: {pitch}, minimum spacing: {minimum_spacing}, target resistance: {target_resistance}, temperature: {temperature}")
-
         self.pitch = pitch
         self.spacing = minimum_spacing
         self.width = self.pitch - self.spacing
@@ -693,7 +681,6 @@ class TrackRouter(ABC):
 
             tracks = self.generate_tracks()
             resistance = self.factory.calculate_total_resistance(tracks, temperature)
-            debug(f"depth: {depth}, width: {self.width}, resistance: {resistance}")
 
             if resistance > target_resistance:
                 rhi = resistance

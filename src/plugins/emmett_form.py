@@ -41,7 +41,6 @@ def fnormalize(value) -> str:
 def fset(field, value, events = False) -> str:
     val = fnormalize(value)
     if events:
-        debug(f"fset: {field.GetName()}: {val}")
         field.SetValue(val)
     else:
         field.ChangeValue(val)
@@ -102,9 +101,6 @@ class EmmettForm(EmmettDialog):
 
     def layoutChange(self, event):
         theLayout = self.getLayout()
-
-        enable_debug(True)
-        debug(f"layoutChange: {theLayout}")
 
         if theLayout == "Bootstrappable":
             self.router = BootstrapTrackRouter(self.factory)
@@ -310,10 +306,7 @@ Requires:
             self.extent_width_value = fset(self.extent_width, right - left)
             self.extent_height_value = fset(self.extent_height, bottom - top)
 
-            enable_debug(True)
-            debug(f"extents: {left}, {top}, {right}, {bottom}")
             margin = self.analyzer.calculate_board_margin((left, top, right, bottom))
-            debug(f"margin: {margin}")
             self.board_margin_value = fset(self.boardMargin, margin)
             self.board_margin_leave(None)
 
@@ -397,13 +390,10 @@ Requires:
         if newValue == self.track_width_value:
             return
 
-        debug(f"track_width_leave: {newValue}")
         self.track_width_value = newValue
 
         spacing_order = (self.track_order & 0x0f0) >> 4
         pitch_order = self.track_order & 0x00f
-
-        debug(f"track_order: {self.track_order:#03x}, spacing_order: {spacing_order}, pitch_order: {pitch_order}")
 
         if spacing_order > pitch_order:
             self.track_order = 0x132
@@ -421,7 +411,6 @@ Requires:
 
     def track_pitch_leave(self, event):
         newValue = field_normalize(self.track_pitch)
-        debug(f"track_pitch_leave: {newValue}, {self.track_pitch_value}")
         if newValue == self.track_pitch_value:
             return
 
@@ -429,8 +418,6 @@ Requires:
 
         spacing_order = (self.track_order & 0x0f0) >> 4
         width_order = (self.track_order & 0xf00) >> 8
-
-        debug(f"track_order: {self.track_order:#03x}, width_order: {width_order}, spacing_order: {spacing_order}")
 
         if spacing_order <= width_order:
             self.track_order = 0x321
@@ -445,7 +432,6 @@ Requires:
 
     def board_margin_leave(self, event):
         newValue = field_normalize(self.boardMargin)
-        debug(f"board_margin_leave: {newValue}")
         if newValue == self.board_margin_value:
             return
 
@@ -458,19 +444,14 @@ Requires:
     def track_spacing_leave(self, event):
         newValue = field_normalize(self.track_spacing)
         newSpacing = float(newValue)
-        debug(f"track_spacing_leave: {newValue}, {newSpacing}")
 
         if newValue == self.track_spacing_value:
             return
-
-        debug(f"track_spacing_leave: {newValue}")
 
         self.track_spacing_value = newValue
 
         pitch_order = (self.track_order & 0x00f)
         width_order = (self.track_order & 0xf00) >> 8
-
-        debug(f"track_order: {self.track_order:#03x}, width_order: {width_order}, pitch_order: {pitch_order}")
 
         if pitch_order <= width_order:
             self.track_order = 0x312
@@ -510,12 +491,10 @@ Requires:
         mt = fget(self.maximum_temperature)
         hp = fget(self.heater_power)
         cold_resistance = temperature_adjust_resistance(tr, mt, at)
-        debug(f"target_resistance: {tr}, ambient_temperature: {at}, maximum_temperature: {mt}, heater_power: {hp}, cold_resistance: {cold_resistance}")
         fset(self.cold_current, sqrt(hp / cold_resistance))
 
     def power_margin_leave(self, event):
         newValue = field_normalize(self.power_margin)
-        debug(f"power_margin_leave: {newValue}")
         if newValue == self.power_margin_value:
             return
 
@@ -530,7 +509,6 @@ Requires:
 
     def thermal_resistance_leave(self, event):
         newValue = field_normalize(self.thermal_resistance)
-        debug(f"thermal_resistance_leave: {newValue}")
         if newValue == self.thermal_resistance_value:
             return
 
@@ -545,7 +523,6 @@ Requires:
 
     def track_thickness_leave(self, event):
         newValue = field_normalize(self.track_thickness)
-        debug(f"track_thickness_leave: {newValue}")
 
         if newValue == self.track_thickness_value:
             return
@@ -559,7 +536,6 @@ Requires:
 
     def heater_power_leave(self, event):
         newValue = field_normalize(self.heater_power)
-        debug(f"heater_power_leave: {newValue}")
         if newValue == self.heater_power_value:
             return
 
@@ -575,7 +551,6 @@ Requires:
 
     def heater_voltage_leave(self, event):
         newValue = field_normalize(self.heater_voltage)
-        debug(f"heater_voltage_leave: {newValue}")
         if newValue == self.heater_voltage_value:
             return
 
@@ -588,7 +563,6 @@ Requires:
 
     def ambient_temperature_leave(self, event):
         newValue = field_normalize(self.ambient_temperature)
-        debug(f"ambient_temperature_leave: {newValue}")
         if newValue == self.ambient_temperature_value:
             return
 
@@ -603,7 +577,6 @@ Requires:
 
     def maximum_temperature_leave(self, event):
         newValue = field_normalize(self.maximum_temperature)
-        debug(f"maximum_temperature_leave: {newValue}")
         if newValue == self.maximum_temperature_value:
             return
 
@@ -634,7 +607,6 @@ Requires:
             if self.auto_geometryze.GetValue():
                 self.click_geometryze_button(event)
 
-            debug(f"self.track_width_value: {self.track_width_value}, self.track_spacing_value: {self.track_spacing_value}")
             builder = self.builder
             router = self.router
             factory = router.factory

@@ -24,14 +24,11 @@ class EmmettAction( pcbnew.ActionPlugin ):
     def Run(self):
         try:
             board = pcbnew.GetBoard()
-            enable_debug(True)
             if not board:
                 info_msg("No PCB board is currently loaded.")
                 return
 
             # Create and show the form
-            enable_debug(True)
-            debug("Running Emmett")
             builder = BoardBuilder(board)
             analyzer = BoardAnalyzer(board)
             factory = TraceSegmentFactory()

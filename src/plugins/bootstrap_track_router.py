@@ -8,8 +8,6 @@ from math import sqrt, ceil, fabs, floor
 
 import pcbnew
 
-from .my_debug import debug, enable_debug
-
 from typing import List, Tuple, Optional, Dict
 from .track_router import TrackRouter, PRECISION
 from .trace_segment_factory import TraceSegment, TraceSegmentFactory, ArcSegment, LinearSegment
@@ -203,9 +201,6 @@ class BootstrapTrackRouter(TrackRouter):
         """
         xstart = self.vert_centre - self.pitch/2
 
-        enable_debug(True)
-        debug(f"vert_count: {self.vert_count}, vert_top: {self.vert_top}, vert_bottom: {self.vert_bottom}")
-
         result = self.serpentine_track(
             (xstart, self.vert_top),
             (xstart, self.vert_bottom),
@@ -285,8 +280,6 @@ class BootstrapTrackRouter(TrackRouter):
             List of TraceSegment objects forming heating element.
         """
         xstart = self.vert_centre + self.pitch/2
-
-        debug(f"vert_count: {self.vert_count}, vert_top: {self.vert_top}, vert_bottom: {self.vert_bottom}")
 
         result = self.serpentine_track(
             (xstart, self.vert_top),
@@ -412,7 +405,6 @@ class BootstrapTrackRouter(TrackRouter):
 
         new_xc = round(c_centre[0] + sqrt(5) * self.pitch * 1e-6, PRECISION)
         deltax = c_extend[0] - new_xc
-        debug(f"new_xc: {new_xc}, pitch: {self.pitch}, c_centre: {c_centre}, c_extend: {c_extend}, ref_point: {ref_point}, deltax: {deltax}")
         self.shorten_track_pair(second, i_extend, deltax)
 
         result.extend(second)
@@ -431,8 +423,6 @@ class BootstrapTrackRouter(TrackRouter):
         """
         self.update_derived_parameters()
 
-        enable_debug(True)
-
         self.edge_offset = (self.width + self.pitch)/2
         self.pitch_plus = self.pitch * 3 / 2
 
@@ -444,7 +434,6 @@ class BootstrapTrackRouter(TrackRouter):
         
         self.split_top = self.centre[1] - self.pitch * (self.split_count / 2 - 0.5)
         self.split_bottom = self.centre[1] + self.pitch * (self.split_count / 2 - 0.5)
-        debug(f"split_count: {self.split_count}, split_top: {self.split_top}, split_bottom: {self.split_bottom}")
 
         self.vert_top = self.top + self.margin + self.edge_offset
         self.vert_bottom = self.split_top - self.pitch_plus
@@ -454,9 +443,6 @@ class BootstrapTrackRouter(TrackRouter):
         self.vert_count = floor((self.right - self.left - 2*self.margin - self.width + 0.01) / self.pitch) + 1
         self.vert_centre = self.centre[0]
         self.vert_lcount = self.vert_count / 2
-        debug(f"vert_count: {self.vert_count}, vert_top: {self.vert_top}, vert_bottom: {self.vert_bottom}")
-
-        debug(f"connections.right: {self.connections[0].right()}, connections.left: {self.connections[1].left()}")
 
         if (self.vert_count % 4 == 0):
             self.vert_lcount = self.vert_lcount - 1
@@ -476,7 +462,6 @@ class BootstrapTrackRouter(TrackRouter):
         self.split_left = self.left + self.margin + self.edge_offset
         self.split_right = self.right - self.margin - self.edge_offset
         self.split_centre = self.fuse[0].right() - self.width / 2
-        debug(f"split_left: {self.split_left}, split_right: {self.split_right}, split_centre: {self.split_centre}")
 
         return self.generate_left_tracks() + self.generate_right_tracks()
 
@@ -487,9 +472,6 @@ class BootstrapTrackRouter(TrackRouter):
 
         hja = self.high_jumper_arc
         lja = self.low_jumper_arc
-
-        debug(f"high_jumper_arc: {hja.start_point} {hja.mid_point} {hja.end_point}")
-        debug(f"low_jumper_arc: {lja.start_point} {lja.mid_point} {lja.end_point}")
 
         # Need coordinates in nanometres. arcs are in metres. pitch is in microns
         hi_point = (int(hja.mid_point[0] * 1e9), int(hja.mid_point[1] * 1e9))
@@ -515,32 +497,19 @@ class BootstrapTrackRouter(TrackRouter):
         lo_mid = pcbnew.VECTOR2I(int(lja.mid_point[0] * 1e9), int(lja.mid_point[1] * 1e9))
         lo_width = int(lja.width * 1e9) - 260000 # 0.13mm inset from track edge based on JLCPCB capabilities
 
-        if hi_mask is not None:
-            debug(f"hi_mask: {hi_mask.GetStart()} {hi_mask.GetArcMid()} {hi_mask.GetEnd()}, width: {hi_mask.GetWidth()}, thisown: {hi_mask.thisown}, uuid: {hi_mask.m_Uuid}")
-        if lo_mask is not None:
-            debug(f"lo_mask: {lo_mask.GetStart()} {lo_mask.GetArcMid()} {lo_mask.GetEnd()}, width: {lo_mask.GetWidth()}, thisown: {lo_mask.thisown}, uuid: {lo_mask.m_Uuid}")
-
-        if hi_mask is lo_mask:
-            debug(f"High and low jumper masks are the same")
-
         if hi_mask is None or hi_mask is lo_mask:
-            debug(f"Creating high jumper mask")
             hi_mask = pcbnew.PCB_SHAPE(self.analyzer.board)
             hi_mask.SetShape(pcbnew.SHAPE_T_ARC)
             hi_mask.SetLayer(pcbnew.F_Mask)
             self.analyzer.board.Add(hi_mask)
 
         if lo_mask is None:
-            debug(f"Creating low jumper mask")
             lo_mask = pcbnew.PCB_SHAPE(self.analyzer.board)
             lo_mask.SetShape(pcbnew.SHAPE_T_ARC)
             lo_mask.SetLayer(pcbnew.F_Mask)
             self.analyzer.board.Add(lo_mask)
 
         self.align_arc_mask(hja, hi_mask)
-
-        debug(f"hi_mask: {hi_mask.GetStart()} {hi_mask.GetArcMid()} {hi_mask.GetEnd()}, width: {hi_mask.GetWidth()}, thisown: {hi_mask.thisown}, uuid: {hi_mask.m_Uuid}")
-        debug(f"lo_mask: {lo_mask.GetStart()} {lo_mask.GetArcMid()} {lo_mask.GetEnd()}, width: {lo_mask.GetWidth()}, thisown: {lo_mask.thisown}, uuid: {lo_mask.m_Uuid}")
 
         self.align_arc_mask(lja, lo_mask)
 

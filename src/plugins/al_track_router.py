@@ -9,8 +9,6 @@ from math import sqrt, ceil, fabs, floor
 
 import pcbnew
 
-from .my_debug import debug, enable_debug
-
 from typing import List, Tuple, Optional, Dict
 from .track_router import TrackRouter
 from .trace_segment_factory import TraceSegment, TraceSegmentFactory, ArcSegment, LinearSegment
