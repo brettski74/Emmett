@@ -290,71 +290,72 @@ class AlTrackRouter(TrackRouter):
         result[0].move_start((0, -pitch))
 
         # Insert serpentine tracks in between fuse terminals
-        spacing_adjust = self.pitch/(self.fuse_count-1)
-        xfstart = self.fuse_right
-        yfstart = self.fuse[0].clear_bottom() + self.width/2 + 1.5*self.pitch + spacing_adjust/2
-        yfend = self.fuse[1].clear_top() - self.pitch + self.spacing/2 - spacing_adjust/2
-        
-        tracks = self.serpentine_track(
-            (xfstart, yfstart),
-            (xfstart, yfend),
-            self.width,
-            self.spacing + spacing_adjust,
-            self.fuse_count,
-            self.factory,
-            -1
-        )
+        if self.fuse_count > 1:
+            spacing_adjust = self.pitch/(self.fuse_count-1)
+            xfstart = self.fuse_right
+            yfstart = self.fuse[0].clear_bottom() + self.width/2 + 1.5*self.pitch + spacing_adjust/2
+            yfend = self.fuse[1].clear_top() - self.pitch + self.spacing/2 - spacing_adjust/2
+            
+            tracks = self.serpentine_track(
+                (xfstart, yfstart),
+                (xfstart, yfend),
+                self.width,
+                self.spacing + spacing_adjust,
+                self.fuse_count,
+                self.factory,
+                -1
+            )
 
-        tracks.append(self.factory.create_linear_segment(
-            scale_vec(((self.fuse_left - self.pitch/2), (self.fuse[0].clear_bottom() + self.width/2)), 1e-6),
-            scale_vec(((self.fuse_right - 1.5*self.pitch - spacing_adjust/2), (self.fuse[0].clear_bottom() + self.width/2)), 1e-6),
-            self.width / 1e6
-        ))
-        tracks.append(self.corner_90(tracks[-1].end_point, tracks[0].start_point))
-        tracks[-3].end_point = result[0].end_point
-        result[0].end_point = (result[0].end_point[0], tracks[-2].start_point[1] - self.pitch*5e-7)
-        tracks.append(self.corner_90(tracks[-2].start_point, result[0].end_point))
+            tracks.append(self.factory.create_linear_segment(
+                scale_vec(((self.fuse_left - self.pitch/2), (self.fuse[0].clear_bottom() + self.width/2)), 1e-6),
+                scale_vec(((self.fuse_right - 1.5*self.pitch - spacing_adjust/2), (self.fuse[0].clear_bottom() + self.width/2)), 1e-6),
+                self.width / 1e6
+            ))
+            tracks.append(self.corner_90(tracks[-1].end_point, tracks[0].start_point))
+            tracks[-3].end_point = result[0].end_point
+            result[0].end_point = (result[0].end_point[0], tracks[-2].start_point[1] - self.pitch*5e-7)
+            tracks.append(self.corner_90(tracks[-2].start_point, result[0].end_point))
 
-        hole = self.holes[0]
+            hole = self.holes[0]
 
-        # Create linear tracks from the pad
-        y = self.top + self.margin + self.width/2
-        rsum = hole.clear_radius() + 2*self.pitch
-        yc = y + 1.5 * self.pitch
-        dy = hole.y - yc
-        dx = sqrt(rsum*rsum - dy*dy)
-        x = hole.x + dx
-        line = normalize_vec((-dx, dy), 1.5*self.pitch)
-        start = (x, y);
-        elbow = (pad, y)
-        tracks.append(self.factory.create_linear_segment(scale_vec(start, 1e-6), scale_vec(elbow, 1e-6), self.width * 1e-6))
-        tracks.append(self.factory.create_linear_segment(scale_vec(elbow, 1e-6), scale_vec(self.left_pad, 1e-6), self.width * 1e-6))
+            # Create linear tracks from the pad
+            y = self.top + self.margin + self.width/2
+            rsum = hole.clear_radius() + 2*self.pitch
+            yc = y + 1.5 * self.pitch
+            dy = hole.y - yc
+            dx = sqrt(rsum*rsum - dy*dy)
+            x = hole.x + dx
+            line = normalize_vec((-dx, dy), 1.5*self.pitch)
+            start = (x, y);
+            elbow = (pad, y)
+            tracks.append(self.factory.create_linear_segment(scale_vec(start, 1e-6), scale_vec(elbow, 1e-6), self.width * 1e-6))
+            tracks.append(self.factory.create_linear_segment(scale_vec(elbow, 1e-6), scale_vec(self.left_pad, 1e-6), self.width * 1e-6))
 
-        # Create arcs around edge of left top hole
-        end = add_vec((x, yc), line)
-        mid = add_vec((x, yc), normalize_vec(perp_vec(sub_vec(start, end)), 1.5*self.pitch))
-        tracks.append(self.factory.create_arc_segment(scale_vec(start, 1e-6), scale_vec(mid, 1e-6), scale_vec(end, 1e-6), self.width / 1e6))
+            # Create arcs around edge of left top hole
+            end = add_vec((x, yc), line)
+            mid = add_vec((x, yc), normalize_vec(perp_vec(sub_vec(start, end)), 1.5*self.pitch))
+            tracks.append(self.factory.create_arc_segment(scale_vec(start, 1e-6), scale_vec(mid, 1e-6), scale_vec(end, 1e-6), self.width / 1e6))
 
-        x = result[-1].end_point[0] * 1e6
-        xc = x + 1.5 * self.pitch
-        dx = xc - hole.x
-        dy = sqrt(rsum*rsum - dx*dx)
-        y = hole.y + dy
-        result[-1].move_end((0, y*1e-6 - result[-1].end_point[1]))
-        line = normalize_vec((-dx, -dy), 1.5*self.pitch)
-        end = add_vec((xc, y), line)
-        mid = add_vec((xc, y), normalize_vec(perp_vec(sub_vec(start, end)), 1.5*self.pitch))
-        tracks.append(self.factory.create_arc_segment(result[-1].end_point, scale_vec(mid, 1e-6), scale_vec(end, 1e-6), self.width / 1e6))
+            x = result[-1].end_point[0] * 1e6
+            xc = x + 1.5 * self.pitch
+            dx = xc - hole.x
+            dy = sqrt(rsum*rsum - dx*dx)
+            y = hole.y + dy
+            result[-1].move_end((0, y*1e-6 - result[-1].end_point[1]))
+            line = normalize_vec((-dx, -dy), 1.5*self.pitch)
+            end = add_vec((xc, y), line)
+            mid = add_vec((xc, y), normalize_vec(perp_vec(sub_vec(start, end)), 1.5*self.pitch))
+            tracks.append(self.factory.create_arc_segment(result[-1].end_point, scale_vec(mid, 1e-6), scale_vec(end, 1e-6), self.width / 1e6))
 
-        start = tracks[-1].end_point
-        end = tracks[-2].end_point
-        radius = hole.clear_radius() + self.pitch/2
-        mid = add_vec((hole.x * 1e-6, hole.y * 1e-6), normalize_vec(perp_vec(sub_vec(start, end)), 1e-6 * radius))
-        tracks.append(self.factory.create_arc_segment(start, mid, end, self.width / 1e6))
+            start = tracks[-1].end_point
+            end = tracks[-2].end_point
+            radius = hole.clear_radius() + self.pitch/2
+            mid = add_vec((hole.x * 1e-6, hole.y * 1e-6), normalize_vec(perp_vec(sub_vec(start, end)), 1e-6 * radius))
+            tracks.append(self.factory.create_arc_segment(start, mid, end, self.width / 1e6))
 
-        result.extend(tracks)
+            result.extend(tracks)
 
-        self.avoid_hole(result, hole, hole.clear_radius() + self.pitch)
+        self.avoid_hole(result, self.holes[0], self.holes[0].clear_radius() + self.pitch)
         self.avoid_hole(result, self.holes[2])
 
         return result
