@@ -713,7 +713,6 @@ Requires:
             factory = self.router.factory
             msg = f"Track details exported to: {csv_filename}, total resistance = {factory.calculate_total_resistance(tracks, float(self.maximum_temperature_value)):.3f}Ω"
             info_msg(msg)
-            debug(msg)
 
             return timestamp
             

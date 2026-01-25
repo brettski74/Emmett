@@ -321,9 +321,7 @@ class TrackRouter(ABC):
 
         while resistance < target_resistance:
             working_width = self.working_width(self.spacing, self.margin)
-            
-            # Remember that there is one more track than track pitches between them
-            self.pitch = working_width / (track_count - 1)
+            self.pitch = working_width / track_count
             self.width = self.pitch - self.spacing
 
             tracks = self.generate_tracks()
@@ -436,11 +434,8 @@ class TrackRouter(ABC):
             arc_radius = round((arc_bottom - arc_mid), PRECISION)
             arc_left = round(arc_right - arc_radius, PRECISION)
 
-            enable_debug(True)
-
             if arc_mid >= pad_top and arc_mid <= pad_bottom and arc_left < pad_right:
                 offset = round(pad_right - arc_left, PRECISION)
-                debug(f"arc_right: {arc_right}, arc_radius: {arc_radius}, arc_left: {arc_left}, arc_mid: {arc_mid}, pad_top: {pad_top}, pad_bottom: {pad_bottom}, line_right: {line_right}, pad_right: {pad_right}, pad_left: {pad_left}")
             elif arc_mid < pad_top and arc_bottom > pad_top and (arc_right <= pad_right or distance((arc_right, arc_mid), (pad_right, pad_top)) < arc_radius):
                 deltay = round(pad_top - arc_mid, PRECISION)
                 new_right = round(pad_right + sqrt(arc_radius*arc_radius - deltay*deltay), PRECISION)
@@ -693,9 +688,7 @@ class TrackRouter(ABC):
 
         self.spacing = minimum_spacing
         working_width = self.working_width(self.spacing, self.margin)
-        
-        # Remember that there is one more tack than the track pitches between them
-        self.pitch = working_width / (track_count - 1)
+        self.pitch = working_width / track_count
         self.width = self.pitch - self.spacing
 
         tracks = self.generate_tracks()
@@ -705,9 +698,7 @@ class TrackRouter(ABC):
         shi = self.pitch / 2
         self.spacing = shi
         working_width = self.working_width(self.spacing, self.margin)
-
-        # Remember that there is one more tack than the track pitches between them
-        self.pitch = working_width / (track_count - 1)
+        self.pitch = working_width / track_count
         self.width = self.pitch - self.spacing
         tracks = self.generate_tracks()
         rhi = self.factory.calculate_total_resistance(tracks, temperature)
@@ -717,9 +708,7 @@ class TrackRouter(ABC):
 
             self.spacing = (shi + slo) / 2
             working_width = self.working_width(self.spacing, self.margin)
-
-            # Remember that there is one more tack than the track pitches between them
-            self.pitch = working_width / (track_count - 1)
+            self.pitch = working_width / track_count
             self.width = self.pitch - self.spacing
 
             tracks = self.generate_tracks()
@@ -744,9 +733,7 @@ class TrackRouter(ABC):
             resistance = rhi
 
         working_width = self.working_width(self.spacing, self.margin)
-
-        # Remember that there is one more tack than the track pitches between them
-        self.pitch = working_width / (track_count - 1)
+        self.pitch = working_width / track_count
         self.width = self.pitch - self.spacing
 
         return resistance
