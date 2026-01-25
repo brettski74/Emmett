@@ -123,13 +123,18 @@ class TrackRouter(ABC):
         """
         working_width = self.working_width(spacing, margin)
         maximum_pitch = self.maximum_track_pitch()
-        return 2 * floor(working_width / maximum_pitch)
+
+        guess = floor(working_width / maximum_pitch) + 1
+        if guess % 2 != 0:
+            guess += 1
+
+        return guess
 
     def maximum_track_pitch(self) -> int:
         """
         Return the maximum track pitch to assume when optimizing tracks in microns.
         """
-        return 8000
+        return 6000
 
     @abstractmethod
     def update_board(self, builder: BoardBuilder) -> List[TraceSegment]:
@@ -316,7 +321,9 @@ class TrackRouter(ABC):
 
         while resistance < target_resistance:
             working_width = self.working_width(self.spacing, self.margin)
-            self.pitch = working_width / track_count
+            
+            # Remember that there is one more track than track pitches between them
+            self.pitch = working_width / (track_count - 1)
             self.width = self.pitch - self.spacing
 
             tracks = self.generate_tracks()
@@ -344,7 +351,7 @@ class TrackRouter(ABC):
             self.spacing = save_spacing
             raise ValueError(f"No high bracket found for target resistance of {target_resistance} ohms")
 
-        resistance = self.finish_optimization(target_resistance, target_temperature, self.working_width(self.spacing, self.margin)/track_count - 10, minimum_spacing)
+        resistance = self.finish_optimization(target_resistance, target_temperature, track_count, minimum_spacing)
         pitch = self.pitch
         width = self.width
         error = fabs(resistance - target_resistance)
@@ -592,6 +599,8 @@ class TrackRouter(ABC):
 
             d_cp = distance(point, centre)
             d_mp = distance(point, t.mid_point)
+            enable_debug(True)
+            debug(f"d_cp: {d_cp}, d_mp: {d_mp}, centre: {centre}, point: {point}")
 
             # Only consider arcs where the arc is closer to the reference point than the centre
             if d_mp > d_cp:
@@ -659,48 +668,61 @@ class TrackRouter(ABC):
 
         return self.factory.create_arc_segment(start, mid, end, self.width / 1e6)
 
-    def finish_optimization(self, target_resistance, temperature, pitch, minimum_spacing):
+    def finish_optimization(self, target_resistance, temperature, track_count, minimum_spacing):
         global TOLERANCE
         depth = 100
 
-        self.pitch = pitch
         self.spacing = minimum_spacing
+        working_width = self.working_width(self.spacing, self.margin)
+        
+        # Remember that there is one more tack than the track pitches between them
+        self.pitch = working_width / (track_count - 1)
         self.width = self.pitch - self.spacing
 
         tracks = self.generate_tracks()
         rlo = self.factory.calculate_total_resistance(tracks, temperature)
-        wlo = self.width
-        whi = 0
-        rhi = 0
+        slo = self.spacing
 
-        while depth > 0 and fabs(rlo - rhi) > TOLERANCE and fabs(wlo - whi) > TOLERANCE:
+        shi = self.pitch / 2
+        self.spacing = shi
+        working_width = self.working_width(self.spacing, self.margin)
+        self.pitch = working_width / track_count
+        self.width = self.pitch - self.spacing
+        tracks = self.generate_tracks()
+        rhi = self.factory.calculate_total_resistance(tracks, temperature)
+
+        while depth > 0 and fabs(rlo - rhi) > TOLERANCE and fabs(slo - shi) > TOLERANCE:
             depth = depth - 1
 
-            self.width = (whi + wlo) / 2
-            self.spacing = self.pitch - self.width
+            self.spacing = (shi + slo) / 2
+            working_width = self.working_width(self.spacing, self.margin)
+            self.pitch = working_width / track_count
+            self.width = self.pitch - self.spacing
 
             tracks = self.generate_tracks()
             resistance = self.factory.calculate_total_resistance(tracks, temperature)
 
             if resistance > target_resistance:
                 rhi = resistance
-                whi = self.width
+                shi = self.spacing
             else:
                 rlo = resistance
-                wlo = self.width
+                slo = self.spacing
 
         if depth <= 0:
             raise ValueError(f"Target resistance of {target_resistance} ohms not achievable with pitch of {pitch} and minimum spacing of {minimum_spacing}")
 
         # Pick whichever side of the bracket is closer to the target resistance
         if fabs(rlo - target_resistance) < fabs(rhi - target_resistance):
-            self.width = wlo
+            self.spacing = slo
             resistance = rlo
         else:
-            self.width = whi
+            self.spacing = shi
             resistance = rhi
 
-        self.spacing = self.pitch - self.width
+        working_width = self.working_width(self.spacing, self.margin)
+        self.pitch = working_width / track_count
+        self.width = self.pitch - self.spacing
 
         return resistance
 

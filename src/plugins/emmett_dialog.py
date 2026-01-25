@@ -735,5 +735,3 @@ class EmmettDialog ( wx.Dialog ):
 
     def click_close_button( self, event ):
         event.Skip()
-
-

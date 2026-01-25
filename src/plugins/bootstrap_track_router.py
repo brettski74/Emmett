@@ -227,9 +227,13 @@ class BootstrapTrackRouter(TrackRouter):
             self.factory,
             -1
         )
+        enable_debug(True)
+        debug(f"second.length: {len(second)}, split count: {self.split_count}, split_centre: {self.split_centre}, pitch_plus: {self.pitch_plus}, width: {self.width}, spacing: {self.spacing}")
 
         # Arcs in metres, left/centre in microns
+        debug("calling closest_arc")
         i = self.closest_arc(second, (self.left * 1e-6, self.centre[1] * 1e-6))
+        debug(f"closest_arc: {i}")
         self.high_jumper_arc = second[i]
 
         conn_top = self.connections[0].top() + self.width/2
@@ -440,10 +444,14 @@ class BootstrapTrackRouter(TrackRouter):
         
         # Fudge factor added in to avoid undercounting due to rounding errors
         # Remember that we have one more trace than track pitches between traces
-        self.vert_count = floor((self.right - self.left - 2*self.margin - self.width + 0.01) / self.pitch) + 1
+        self.ww = self.working_width(self.spacing, self.margin)
+        self.vert_count = floor((self.ww + self.spacing + 0.01) / self.pitch) + 1
+        if (self.vert_count % 2 != 0):
+            self.vert_count -= 1
+
         self.vert_centre = self.centre[0]
         self.vert_lcount = self.vert_count / 2
-
+        
         if (self.vert_count % 4 == 0):
             self.vert_lcount = self.vert_lcount - 1
             self.vert_centre = self.vert_centre - self.pitch
