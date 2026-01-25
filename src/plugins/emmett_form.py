@@ -104,6 +104,7 @@ class EmmettForm(EmmettDialog):
 
         if theLayout == "Bootstrappable":
             self.router = BootstrapTrackRouter(self.factory)
+            self.router.analyze_board(self.analyzer)
             description = """
 Designed for use on aluminium PCBs with a thermal fuse and a bootstrap jumper to facilitate preheating the board for initial setup.
 
@@ -116,6 +117,7 @@ Requires:
 """.strip()
         elif theLayout == "Continuous": 
             self.router = AlTrackRouter(self.factory)
+            self.router.analyze_board(self.analyzer)
             description = """
 The original design for use on aluminium PCBs with a thermal fuse. There is no bootstrap jumper, so initial board setup may be more challenging without some way to preheat it. Oven setup is also an option.
 

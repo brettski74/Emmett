@@ -654,7 +654,7 @@ class TrackRouter(ABC):
         quadrant = deltax * deltay
 
         if abs(deltax) - abs(deltay) > 1e-9:
-            raise ValueError(msg)
+            raise ValueError(f"Corner 90: Either deltax or deltay should be nonzero, but not both: deltax: {deltax}, deltay: {deltay}")
 
         if abs(deltax) < 1e-9:
             raise ValueError("Corner 90: deltax is zero")
@@ -684,7 +684,9 @@ class TrackRouter(ABC):
         shi = self.pitch / 2
         self.spacing = shi
         working_width = self.working_width(self.spacing, self.margin)
-        self.pitch = working_width / track_count
+
+        # Remember that there is one more tack than the track pitches between them
+        self.pitch = working_width / (track_count - 1)
         self.width = self.pitch - self.spacing
         tracks = self.generate_tracks()
         rhi = self.factory.calculate_total_resistance(tracks, temperature)
@@ -694,7 +696,9 @@ class TrackRouter(ABC):
 
             self.spacing = (shi + slo) / 2
             working_width = self.working_width(self.spacing, self.margin)
-            self.pitch = working_width / track_count
+
+            # Remember that there is one more tack than the track pitches between them
+            self.pitch = working_width / (track_count - 1)
             self.width = self.pitch - self.spacing
 
             tracks = self.generate_tracks()
@@ -719,7 +723,9 @@ class TrackRouter(ABC):
             resistance = rhi
 
         working_width = self.working_width(self.spacing, self.margin)
-        self.pitch = working_width / track_count
+
+        # Remember that there is one more tack than the track pitches between them
+        self.pitch = working_width / (track_count - 1)
         self.width = self.pitch - self.spacing
 
         return resistance

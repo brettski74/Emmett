@@ -28,6 +28,15 @@ def int_distance(a: pcbnew.VECTOR2I, b: Tuple[int, int]) -> float:
 
     return sqrt(dx*dx + dy*dy)
 
+def all_positive(*args) -> float:
+    result = float('inf')
+
+    for num in args:
+        if num <=0:
+            return False
+
+    return True
+
 class BoardAnalyzer:
     """
     Analyzes loaded KiCad PCB layouts to extract trace information.
@@ -211,32 +220,38 @@ class BoardAnalyzer:
             ex = end.x * KICAD_MM
             ey = end.y * KICAD_MM
 
-            margin = min(
-                margin,
-                sx - left,
-                right - sx,
-                sy - top,
-                bottom - sy,
-                ex - left,
-                right - ex,
-                ey - top,
-                bottom - ey,
-            )
+            # Collect the set of margin candidates
+            margins = [
+                sx - left - half_width,
+                right - sx - half_width,
+                sy - top - half_width,
+                bottom - sy - half_width,
+                ex - left - half_width,
+                right - ex - half_width,
+                ey - top - half_width,
+                bottom - ey - half_width,
+            ]
 
             if isinstance(track, pcbnew.PCB_ARC):
                 mid = track.GetMid()
                 mx = mid.x * KICAD_MM
                 my = mid.y * KICAD_MM
-                margin = min(
-                    margin,
-                    mx - left,
-                    right - mx,
-                    my - top,
-                    bottom - my,
-                )
 
-        return round(margin - half_width, PRECISION)
-                
+                margins.extend([
+                    mx - left - half_width,
+                    right - mx - half_width,
+                    my - top - half_width,
+                    bottom - my - half_width,
+                ])
+            
+            # Only consider margin candidates that are entirely within board extents
+            if all_positive(*margins):
+                margin = min(margin, *margins)
+
+        if margin == float('inf'):
+            return 0.55
+
+        return round(margin, PRECISION)
 
     def get_closest_pad(self, point: Tuple[float, float], layer: str, units: float = KICAD_UNITS) -> RectangularPad:
         """

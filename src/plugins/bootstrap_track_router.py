@@ -230,7 +230,10 @@ class BootstrapTrackRouter(TrackRouter):
 
         # Arcs in metres, left/centre in microns
         i = self.closest_arc(second, (self.left * 1e-6, self.centre[1] * 1e-6))
-        self.high_jumper_arc = second[i]
+        if i is not None and i >= 0:
+            self.high_jumper_arc = second[i]
+        else:
+            self.high_jumper_arc = None
 
         conn_top = self.connections[0].top() + self.width/2
         conn_left = self.connections[0].x
@@ -342,7 +345,10 @@ class BootstrapTrackRouter(TrackRouter):
 
         # Arcs in metres, left/centre in microns
         i = self.closest_arc(fourth, (self.left * 1e-6, self.centre[1] * 1e-6))
-        self.low_jumper_arc = fourth[i]
+        if i is not None and i >= 0:
+            self.low_jumper_arc = fourth[i]
+        else:
+            self.low_jumper_arc = None
 
         conn_top = self.connections[1].top() + self.width/2
         conn_right = self.connections[1].x
@@ -396,16 +402,18 @@ class BootstrapTrackRouter(TrackRouter):
             self.corner_90(scale_vec((link34_left, link34_bottom), 1e-6), link34_end),
         ]
 
-        ## Extend the one track pair in the centre opposite wheter the two traces turn to connect to the fuse pads
+        ## Extend the one track pair in the centre opposite where the two traces turn to connect to the fuse pads
         ref_point = (self.split_centre * 1e-6, self.centre[1] * 1e-6)
         i_extend = self.closest_arc(second, ref_point)
         i_centre = self.closest_arc(fourth, ref_point)
-        c_extend = self.arc_centre(second[i_extend])
-        c_centre = self.arc_centre(fourth[i_centre])
 
-        new_xc = round(c_centre[0] + sqrt(5) * self.pitch * 1e-6, PRECISION)
-        deltax = c_extend[0] - new_xc
-        self.shorten_track_pair(second, i_extend, deltax)
+        if i_extend is not None and i_extend >= 0 and i_centre is not None and i_centre >= 0:
+            c_extend = self.arc_centre(second[i_extend])
+            c_centre = self.arc_centre(fourth[i_centre])
+
+            new_xc = round(c_centre[0] + sqrt(5) * self.pitch * 1e-6, PRECISION)
+            deltax = c_extend[0] - new_xc
+            self.shorten_track_pair(second, i_extend, deltax)
 
         result.extend(second)
         result.extend(third)
@@ -473,49 +481,39 @@ class BootstrapTrackRouter(TrackRouter):
         """
         Create and/or move the jumper mask to the appropriate size and position.
         """
-
-        hja = self.high_jumper_arc
-        lja = self.low_jumper_arc
-
-        # Need coordinates in nanometres. arcs are in metres. pitch is in microns
-        hi_point = (int(hja.mid_point[0] * 1e9), int(hja.mid_point[1] * 1e9))
-        lo_point = (int(lja.mid_point[0] * 1e9), int(lja.mid_point[1] * 1e9))
-
         drawings = []
         drawings.extend(self.analyzer.board.GetDrawings())
-        hi_mask = self.analyzer.find_closest_mask_arc(hi_point, drawings)
-        if hi_mask is not None:
-            drawings.remove(hi_mask)
 
-        lo_mask = self.analyzer.find_closest_mask_arc(lo_point, drawings)
+        hja = self.high_jumper_arc
+        if hja is not None:
+            # Need coordinates in nanometres. arcs are in metres. pitch is in microns
+            hi_point = (int(hja.mid_point[0] * 1e9), int(hja.mid_point[1] * 1e9))
+            hi_mask = self.analyzer.find_closest_mask_arc(hi_point, drawings)
+            if hi_mask is not None:
+                drawings.remove(hi_mask)
+            else:
+                hi_mask = pcbnew.PCB_SHAPE(self.analyzer.board)
+                hi_mask.SetShape(pcbnew.SHAPE_T_ARC)
+                hi_mask.SetLayer(pcbnew.F_Mask)
+                self.analyzer.board.Add(hi_mask)
 
-        hi_start = pcbnew.VECTOR2I(int(hja.start_point[0] * 1e9), int(hja.start_point[1] * 1e9))
-        hi_end = pcbnew.VECTOR2I(int(hja.end_point[0] * 1e9), int(hja.end_point[1] * 1e9))
-        hi_centre = pcbnew.VECTOR2I(int(hja.center[0] * 1e9), int(hja.center[1] * 1e9))
-        hi_mid = pcbnew.VECTOR2I(int(hja.mid_point[0] * 1e9), int(hja.mid_point[1] * 1e9))
-        hi_width = int(hja.width * 1e9) - 260000 # 0.13mm inset from track edge based on JLCPCB capabilities
+        lja = self.low_jumper_arc
+        if lja is not None:
+            # Need coordinates in nanometres. arcs are in metres. pitch is in microns
+            lo_point = (int(lja.mid_point[0] * 1e9), int(lja.mid_point[1] * 1e9))
+            lo_mask = self.analyzer.find_closest_mask_arc(lo_point, drawings)
 
-        lo_start = pcbnew.VECTOR2I(int(lja.start_point[0] * 1e9), int(lja.start_point[1] * 1e9))
-        lo_end = pcbnew.VECTOR2I(int(lja.end_point[0] * 1e9), int(lja.end_point[1] * 1e9))
-        lo_centre = pcbnew.VECTOR2I(int(lja.center[0] * 1e9), int(lja.center[1] * 1e9))
-        lo_mid = pcbnew.VECTOR2I(int(lja.mid_point[0] * 1e9), int(lja.mid_point[1] * 1e9))
-        lo_width = int(lja.width * 1e9) - 260000 # 0.13mm inset from track edge based on JLCPCB capabilities
+            if lo_mask is None:
+                lo_mask = pcbnew.PCB_SHAPE(self.analyzer.board)
+                lo_mask.SetShape(pcbnew.SHAPE_T_ARC)
+                lo_mask.SetLayer(pcbnew.F_Mask)
+                self.analyzer.board.Add(lo_mask)
 
-        if hi_mask is None or hi_mask is lo_mask:
-            hi_mask = pcbnew.PCB_SHAPE(self.analyzer.board)
-            hi_mask.SetShape(pcbnew.SHAPE_T_ARC)
-            hi_mask.SetLayer(pcbnew.F_Mask)
-            self.analyzer.board.Add(hi_mask)
+        if hja is not None and hi_mask is not None:
+            self.align_arc_mask(hja, hi_mask)
 
-        if lo_mask is None:
-            lo_mask = pcbnew.PCB_SHAPE(self.analyzer.board)
-            lo_mask.SetShape(pcbnew.SHAPE_T_ARC)
-            lo_mask.SetLayer(pcbnew.F_Mask)
-            self.analyzer.board.Add(lo_mask)
-
-        self.align_arc_mask(hja, hi_mask)
-
-        self.align_arc_mask(lja, lo_mask)
+        if lja is not None and lo_mask is not None:
+            self.align_arc_mask(lja, lo_mask)
 
     def align_arc_mask(self, arc: ArcSegment, mask: pcbnew.PCB_SHAPE):
         """
