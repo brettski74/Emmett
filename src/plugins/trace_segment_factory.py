@@ -135,7 +135,6 @@ class TraceSegment(ABC):
         """
         length = self.get_length()
         width = self.get_width()
-        debug(f"Thickness: {self._factory.thickness}")
         cross_sectional_area = width * self._factory.thickness
         
         # R = ρ * L / A
@@ -404,7 +403,6 @@ class ArcSegment(TraceSegment):
         
         # Calculate resistance using the correct formula
         # R = ρ × θ / (thickness × ln(R_outer / R_inner))
-        debug(f"Thickness: {self._factory.thickness}")
         base_resistance = (self._factory.resistivity * angle_diff) / (self._factory.thickness * math.log(outer_radius / inner_radius))
         
         # Apply adjustment factor to account for model limitations

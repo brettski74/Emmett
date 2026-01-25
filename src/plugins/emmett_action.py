@@ -8,6 +8,7 @@ from .board_builder import BoardBuilder
 from .board_analyzer import BoardAnalyzer
 from .emmett_form import EmmettForm
 from .al_track_router import AlTrackRouter
+from .bootstrap_track_router import BootstrapTrackRouter
 from .my_debug import debug, enable_debug
 from .gui_utils import info_msg, error_msg
 
@@ -23,20 +24,16 @@ class EmmettAction( pcbnew.ActionPlugin ):
     def Run(self):
         try:
             board = pcbnew.GetBoard()
-            enable_debug(True)
             if not board:
                 info_msg("No PCB board is currently loaded.")
                 return
 
             # Create and show the form
-            enable_debug(True)
-            debug("Running Emmett")
             builder = BoardBuilder(board)
             analyzer = BoardAnalyzer(board)
             factory = TraceSegmentFactory()
 
-            router = AlTrackRouter(factory)
-            form = EmmettForm(board, builder, analyzer, router)
+            form = EmmettForm(board, builder, analyzer, factory)
 
             form.ShowModal()
             form.Destroy()

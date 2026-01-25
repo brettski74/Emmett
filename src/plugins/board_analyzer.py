@@ -11,6 +11,7 @@ from math import fabs
 import wx
 import pcbnew
 import re
+from math import sqrt
 from typing import List, Tuple, Optional, Union
 from .trace_segment_factory import TraceSegmentFactory, TraceSegment, LinearSegment, ArcSegment
 from .pad_defs import RectangularPad, CircularPad
@@ -19,6 +20,22 @@ from .my_debug import debug, stringify, enable_debug, stringify
 
 KICAD_UNITS = 1e-9
 KICAD_MM = 1e-6
+PRECISION = 9
+
+def int_distance(a: pcbnew.VECTOR2I, b: Tuple[int, int]) -> float:
+    dx = a.x - b[0]
+    dy = a.y - b[1]
+
+    return sqrt(dx*dx + dy*dy)
+
+def all_positive(*args) -> bool:
+    result = float('inf')
+
+    for num in args:
+        if num <=0:
+            return False
+
+    return True
 
 class BoardAnalyzer:
     """
@@ -65,6 +82,84 @@ class BoardAnalyzer:
 
         return result
 
+    def rect_distance(self, rect: pcbnew.PCB_SHAPE, point: Tuple[float, float]) -> float:
+        """
+        Calculate the distance between a rectangle and a point.
+        """
+        topLeft = rect.GetTopLeft()
+        bottomRight = rect.GetBotRight()
+
+        left = topLeft.x * KICAD_MM
+        top = topLeft.y * KICAD_MM
+        right = bottomRight.x * KICAD_MM
+        bottom = bottomRight.y * KICAD_MM
+
+        # Check if inside the x coordinate range of the rectangle
+        if point[0] >= left and point[0] <= right:
+            # Check if inside the rectabngle
+            if point[1] >= top and point[1] <= bottom:
+                return 0
+            else:
+                # Return the minimum delta Y between either top or bottom to the reference point
+                return min(abs(point[1] - top), abs(point[1]-bottom))
+        
+        # Check if inside the y-coordinate range of the rectangle, but outside the x-coordinate range
+        elif point[1] >= top and point[1] <= bottom:
+            # Return the minimum delta X between either left or right to the reference point
+            return min(abs(point[0] - left), abs(point[0]-right))
+
+        # Otherwise, return the minimum distance to the reference point from any of the 4 corners of the rectangle
+        return min(
+            distance(point, (left, top)),
+            distance(point, (right, top)),
+            distance(point, (left, bottom)),
+            distance(point, (right, bottom))
+        )
+
+    def find_closest_mask(self, point: Tuple[float, float]) -> pcbnew.PCB_SHAPE:
+        """
+        Find the rectangle on the front mask layer closest to a given point.
+        """
+        closest = None
+        closest_distance = float('inf')
+
+        drawings = self.board.GetDrawings()
+        for d in drawings:
+            if isinstance(d, pcbnew.PCB_SHAPE):
+                if d.ShowShape() == "Rect":
+                    if d.GetLayer() == pcbnew.F_Mask:
+                        dist = self.rect_distance(d, point)
+
+                        if dist <= 0:
+                            return d
+                        elif dist < closest_distance:
+                            closest = d
+                            closest_distance = dist
+
+        return closest
+
+    def find_closest_mask_arc(self, point: Tuple[int, int], drawings: Optional[list] = None) -> pcbnew.PCB_SHAPE:
+        """
+        Find the arc on the front mask layer closest to a given mid point.
+        """
+        closest = None
+        closest_distance = float('inf')
+
+        if drawings is None:
+            drawings = []
+            drawings.extend(self.board.GetDrawings())
+
+        for d in drawings:
+            if isinstance(d, pcbnew.PCB_SHAPE):
+                if d.ShowShape() == "Arc" and d.GetLayer() == pcbnew.F_Mask:
+                    dist = int_distance(d.GetArcMid(), point)
+
+                    if dist < closest_distance:
+                        closest = d
+                        closest_distance = dist
+
+        return closest
+
     def get_extents(self, units: float = KICAD_UNITS) -> Tuple[float, float, float, float]:
         """
         Get the extents of the board.
@@ -101,6 +196,63 @@ class BoardAnalyzer:
 
         return (left * units, top * units, right * units, bottom * units)
     
+    def calculate_board_margin(self, extents: Tuple[float, float, float, float]) -> float:
+        """
+        Determine the board margin that appears to have been used for the current board layout.
+
+        This method scans through all of the traces on the board and compares how close to the edges of
+        the board they lie. The closest trace to the edge is taken as the board margin. The answer will
+        be rounded to the nearest nanometre to help avoid issues caused by rounding errors in floating
+        point numbers.
+        """
+
+        left, top, right, bottom = extents
+        margin = float('inf')
+
+        tracks = self.board.GetTracks()
+        for track in tracks:
+            start = track.GetStart()
+            end = track.GetEnd()
+            half_width = track.GetWidth() / 2 * KICAD_MM
+
+            sx = start.x * KICAD_MM
+            sy = start.y * KICAD_MM
+            ex = end.x * KICAD_MM
+            ey = end.y * KICAD_MM
+
+            # Collect the set of margin candidates
+            margins = [
+                sx - left - half_width,
+                right - sx - half_width,
+                sy - top - half_width,
+                bottom - sy - half_width,
+                ex - left - half_width,
+                right - ex - half_width,
+                ey - top - half_width,
+                bottom - ey - half_width,
+            ]
+
+            if isinstance(track, pcbnew.PCB_ARC):
+                mid = track.GetMid()
+                mx = mid.x * KICAD_MM
+                my = mid.y * KICAD_MM
+
+                margins.extend([
+                    mx - left - half_width,
+                    right - mx - half_width,
+                    my - top - half_width,
+                    bottom - my - half_width,
+                ])
+            
+            # Only consider margin candidates that are entirely within board extents
+            if all_positive(*margins):
+                margin = min(margin, *margins)
+
+        if margin == float('inf'):
+            return 0.55
+
+        return round(margin, PRECISION)
+
     def get_closest_pad(self, point: Tuple[float, float], layer: str, units: float = KICAD_UNITS) -> RectangularPad:
         """
         Get the closest pad to a point.
