@@ -227,13 +227,9 @@ class BootstrapTrackRouter(TrackRouter):
             self.factory,
             -1
         )
-        enable_debug(True)
-        debug(f"second.length: {len(second)}, split count: {self.split_count}, split_centre: {self.split_centre}, pitch_plus: {self.pitch_plus}, width: {self.width}, spacing: {self.spacing}")
 
         # Arcs in metres, left/centre in microns
-        debug("calling closest_arc")
         i = self.closest_arc(second, (self.left * 1e-6, self.centre[1] * 1e-6))
-        debug(f"closest_arc: {i}")
         self.high_jumper_arc = second[i]
 
         conn_top = self.connections[0].top() + self.width/2

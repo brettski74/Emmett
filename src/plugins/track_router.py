@@ -599,8 +599,6 @@ class TrackRouter(ABC):
 
             d_cp = distance(point, centre)
             d_mp = distance(point, t.mid_point)
-            enable_debug(True)
-            debug(f"d_cp: {d_cp}, d_mp: {d_mp}, centre: {centre}, point: {point}")
 
             # Only consider arcs where the arc is closer to the reference point than the centre
             if d_mp > d_cp:
