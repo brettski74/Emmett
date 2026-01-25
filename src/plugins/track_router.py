@@ -428,7 +428,27 @@ class TrackRouter(ABC):
         else:
             line_right = max(inl.start_point[0], inl.end_point[0], out.start_point[0], out.end_point[0])
 
-            # TODO: Incomplete case!
+            # Skip this if the pad is closer to the other end of the lines
+            arc_right = round(arc.start_point[0], PRECISION)
+            if (pad_right - line_right) > (arc_right - pad_left):
+                return
+
+            arc_radius = round((arc_bottom - arc_mid), PRECISION)
+            arc_left = round(arc_right - arc_radius, PRECISION)
+
+            enable_debug(True)
+
+            if arc_mid >= pad_top and arc_mid <= pad_bottom and arc_left < pad_right:
+                offset = round(pad_right - arc_left, PRECISION)
+                debug(f"arc_right: {arc_right}, arc_radius: {arc_radius}, arc_left: {arc_left}, arc_mid: {arc_mid}, pad_top: {pad_top}, pad_bottom: {pad_bottom}, line_right: {line_right}, pad_right: {pad_right}, pad_left: {pad_left}")
+            elif arc_mid < pad_top and arc_bottom > pad_top and (arc_right <= pad_right or distance((arc_right, arc_mid), (pad_right, pad_top)) < arc_radius):
+                deltay = round(pad_top - arc_mid, PRECISION)
+                new_right = round(pad_right + sqrt(arc_radius*arc_radius - deltay*deltay), PRECISION)
+                offset = round(new_right - arc_right, PRECISION)
+            elif arc_mid > pad_bottom and arc_top < pad_bottom and (arc_right <= pad_right or distance((arc_right, arc_mid), (pad_right, pad_bottom)) < arc_radius):
+                deltay = round(arc_mid - pad_bottom, PRECISION)
+                new_right = round(pad_right + sqrt(arc_radius*arc_radius - deltay*deltay), PRECISION)
+                offset = round(new_right - arc_right, PRECISION)
 
         if offset != 0:
             arc.move((offset, 0))
@@ -485,6 +505,7 @@ class TrackRouter(ABC):
         # Else top side arcs
         else:
             line_bottom = round(max(inl.start_point[1], inl.end_point[1], out.start_point[1], out.end_point[1]), PRECISION)
+
             arc_bottom = round(arc.start_point[1], PRECISION)
             # Skip this if the pad is closer to the other end of the lines
             if (pad_bottom - line_bottom) > (arc_bottom - pad_top):
@@ -712,7 +733,7 @@ class TrackRouter(ABC):
                 slo = self.spacing
 
         if depth <= 0:
-            raise ValueError(f"Target resistance of {target_resistance} ohms not achievable with pitch of {pitch} and minimum spacing of {minimum_spacing}")
+            raise ValueError(f"Target resistance of {target_resistance} ohms not achievable with pitch of {self.pitch} and minimum spacing of {minimum_spacing}")
 
         # Pick whichever side of the bracket is closer to the target resistance
         if fabs(rlo - target_resistance) < fabs(rhi - target_resistance):
