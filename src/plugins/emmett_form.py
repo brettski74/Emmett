@@ -17,7 +17,6 @@ from .my_debug import debug, enable_debug, stringify
 from .track_router import TrackRouter
 from .al_track_router import AlTrackRouter
 from .bootstrap_track_router import BootstrapTrackRouter
-from .trace_segment_factory import TraceSegmentFactory
 from .gui_utils import info_msg, error_msg, find_parent_window
 
 def resource_dir() -> str:
