@@ -440,7 +440,7 @@ class EmmettDialog ( wx.Dialog ):
         self.m_calculationPanel.SetSizer( bCalculationPanel )
         self.m_calculationPanel.Layout()
         bCalculationPanel.Fit( self.m_calculationPanel )
-        self.m_main_notebook.AddPage( self.m_calculationPanel, u"Calculations", True )
+        self.m_main_notebook.AddPage( self.m_calculationPanel, u"Calculations", False )
         self.m_layoutPanel = wx.Panel( self.m_main_notebook, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, wx.TAB_TRAVERSAL )
         bLayout = wx.BoxSizer( wx.VERTICAL )
 
@@ -452,7 +452,7 @@ class EmmettDialog ( wx.Dialog ):
 
         bLayoutList.Add( self.m_Layout, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5 )
 
-        layoutChoices = [ u"Bootstrappable", u"Continuous", u"Great Scott!" ]
+        layoutChoices = [ u"Bootstrappable", u"Continuous" ]
         self.layout = wx.Choice( self.m_layoutPanel, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, layoutChoices, wx.CB_SORT )
         self.layout.SetSelection( 0 )
         bLayoutList.Add( self.layout, 0, wx.ALL, 5 )
@@ -471,7 +471,7 @@ class EmmettDialog ( wx.Dialog ):
         self.m_layoutPanel.SetSizer( bLayout )
         self.m_layoutPanel.Layout()
         bLayout.Fit( self.m_layoutPanel )
-        self.m_main_notebook.AddPage( self.m_layoutPanel, u"Layout", False )
+        self.m_main_notebook.AddPage( self.m_layoutPanel, u"Layout", True )
 
         bSizer3.Add( self.m_main_notebook, 1, wx.EXPAND |wx.ALL, 5 )
 
@@ -735,3 +735,5 @@ class EmmettDialog ( wx.Dialog ):
 
     def click_close_button( self, event ):
         event.Skip()
+
+

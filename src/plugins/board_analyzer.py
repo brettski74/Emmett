@@ -28,7 +28,7 @@ def int_distance(a: pcbnew.VECTOR2I, b: Tuple[int, int]) -> float:
 
     return sqrt(dx*dx + dy*dy)
 
-def all_positive(*args) -> float:
+def all_positive(*args) -> bool:
     result = float('inf')
 
     for num in args:
@@ -152,11 +152,11 @@ class BoardAnalyzer:
         for d in drawings:
             if isinstance(d, pcbnew.PCB_SHAPE):
                 if d.ShowShape() == "Arc" and d.GetLayer() == pcbnew.F_Mask:
-                    distance = int_distance(d.GetArcMid(), point)
+                    dist = int_distance(d.GetArcMid(), point)
 
-                    if distance < closest_distance:
+                    if dist < closest_distance:
                         closest = d
-                        closest_distance = distance
+                        closest_distance = dist
 
         return closest
 

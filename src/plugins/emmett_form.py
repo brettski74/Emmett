@@ -309,7 +309,7 @@ Requires:
             self.extent_height_value = fset(self.extent_height, bottom - top)
 
             margin = self.analyzer.calculate_board_margin((left, top, right, bottom))
-            self.board_margin_value = fset(self.boardMargin, margin)
+            self.boardMargin.ChangeValue(fnormalize(margin))
             self.board_margin_leave(None)
 
             board_text = self.analyzer.parse_board_text()

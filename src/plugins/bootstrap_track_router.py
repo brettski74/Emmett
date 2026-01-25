@@ -212,8 +212,9 @@ class BootstrapTrackRouter(TrackRouter):
         )
 
         scaled_pitch = self.pitch * 1e-6
-        self.shorten_track_pair(result, 3, scaled_pitch)
-        result[0].move_start((0, scaled_pitch))
+        if len(result) > 3:
+            self.shorten_track_pair(result, 3, scaled_pitch)
+            result[0].move_start((0, scaled_pitch))
 
         self.avoid_pad(result, self.fuse[0])
         self.avoid_pad(result, self.connections[0])
@@ -297,9 +298,10 @@ class BootstrapTrackRouter(TrackRouter):
         self.avoid_hole(result, self.holes[1])
 
         scaled_pitch = self.pitch * 1e-6
-        self.shorten_track_pair(result, 3, scaled_pitch)
-        self.shorten_track_pair(result, 7, scaled_pitch)
-        result[0].move_start((0, scaled_pitch))
+        if len(result) > 7:
+            self.shorten_track_pair(result, 3, scaled_pitch)
+            self.shorten_track_pair(result, 7, scaled_pitch)
+            result[0].move_start((0, scaled_pitch))
 
         self.avoid_pad(result, self.fuse[0])
         self.avoid_pad(result, self.connections[1])

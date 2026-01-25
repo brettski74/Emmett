@@ -1964,7 +1964,7 @@
             <object class="notebookpage" expanded="true">
               <property name="bitmap"></property>
               <property name="label">Calculations</property>
-              <property name="select">1</property>
+              <property name="select">0</property>
               <object class="wxPanel" expanded="true">
                 <property name="BottomDockable">1</property>
                 <property name="LeftDockable">1</property>
@@ -4065,7 +4065,7 @@
             <object class="notebookpage" expanded="true">
               <property name="bitmap"></property>
               <property name="label">Layout</property>
-              <property name="select">0</property>
+              <property name="select">1</property>
               <object class="wxPanel" expanded="true">
                 <property name="BottomDockable">1</property>
                 <property name="LeftDockable">1</property>
@@ -4212,7 +4212,7 @@
                           <property name="caption"></property>
                           <property name="caption_visible">1</property>
                           <property name="center_pane">0</property>
-                          <property name="choices">&quot;Bootstrappable&quot; &quot;Continuous&quot; &quot;Great Scott!&quot;</property>
+                          <property name="choices">&quot;Bootstrappable&quot; &quot;Continuous&quot;</property>
                           <property name="close_button">1</property>
                           <property name="context_help"></property>
                           <property name="context_menu">1</property>
