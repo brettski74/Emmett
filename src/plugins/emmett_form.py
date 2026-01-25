@@ -13,9 +13,10 @@ from .emmett_dialog import EmmettDialog
 from .board_builder import BoardBuilder
 from .board_analyzer import BoardAnalyzer
 from .trace_segment_factory import TraceSegmentFactory, temperature_adjust_resistance
-from .my_debug import debug,enable_debug, stringify
+from .my_debug import debug, enable_debug, stringify
 from .track_router import TrackRouter
 from .al_track_router import AlTrackRouter
+from .bootstrap_track_router import BootstrapTrackRouter
 from .gui_utils import info_msg, error_msg, find_parent_window
 
 def resource_dir() -> str:
@@ -39,7 +40,6 @@ def fnormalize(value) -> str:
 def fset(field, value, events = False) -> str:
     val = fnormalize(value)
     if events:
-        debug(f"fset: {field.GetName()}: {val}")
         field.SetValue(val)
     else:
         field.ChangeValue(val)
@@ -62,7 +62,7 @@ def field_normalize(field) -> str:
     return result
 
 class EmmettForm(EmmettDialog):
-    def __init__(self, board: pcbnew.BOARD, builder: BoardBuilder, analyzer: BoardAnalyzer, router: TrackRouter):
+    def __init__(self, board: pcbnew.BOARD, builder: BoardBuilder, analyzer: BoardAnalyzer, factory: TraceSegmentFactory):
         super().__init__(find_parent_window())
 
         self.logo_bitmap.SetBitmap(wx.Bitmap(os.path.join(resource_dir(), "emmett-192.png")))
@@ -70,7 +70,7 @@ class EmmettForm(EmmettDialog):
         self.board = board
         self.builder = builder
         self.analyzer = analyzer
-        self.router = router
+        self.factory = factory
 
         self.track_width_value = ""
         self.track_spacing_value = ""
@@ -84,11 +84,55 @@ class EmmettForm(EmmettDialog):
         self.thermal_resistance_value = ""
         self.power_margin_value = ""
         self.target_resistance_value = ""
+        self.board_margin_value = ""
+
+        # Required to set the self.router value
+        self.layoutChange(None)
 
         self.click_analyze_button(None)
 
         self.m_main_notebook.ChangeSelection(0)
         self.heater_voltage.SetFocus()
+
+    def getLayout(self) -> str:
+        index = self.layout.GetSelection()
+        return self.layout.GetString(index)
+
+    def layoutChange(self, event):
+        theLayout = self.getLayout()
+
+        if theLayout == "Bootstrappable":
+            self.router = BootstrapTrackRouter(self.factory)
+            self.router.analyze_board(self.analyzer)
+            description = """
+Designed for use on aluminium PCBs with a thermal fuse and a bootstrap jumper to facilitate preheating the board for initial setup.
+
+Requires:
+
+  * 2 Power connection pads near the top edge of the board.
+  * 2 thermal fuse pads near the centre of the board.
+  * 4 M3 mounting holes near the corners of the board.
+  * 2 Bootstrap pads near the left edge of the board.
+""".strip()
+        elif theLayout == "Continuous": 
+            self.router = AlTrackRouter(self.factory)
+            self.router.analyze_board(self.analyzer)
+            description = """
+The original design for use on aluminium PCBs with a thermal fuse. There is no bootstrap jumper, so initial board setup may be more challenging without some way to preheat it. Oven setup is also an option.
+
+Requires:
+
+  * 2 Power connection pads near the top edge of the board.
+  * 2 thermal fuse pads near the centre of the board.
+  * 4 M3 mounting holes near the corners of the board.
+""".strip()
+        else:
+            description = "Unknown layout. Please excuse the crudity of this description. I didn't have time to research the details or write it."
+        
+        if self.board_margin_value and self.router is not None:
+            self.router.margin = float(self.board_margin_value) * 1000
+
+        self.layoutDescription.ChangeValue(description)
 
     def click_clear_button(self, event):
         self.builder.clear_tracks()
@@ -164,6 +208,7 @@ class EmmettForm(EmmettDialog):
 
         self.calculate_cold_current()
 
+        
     def click_resize_button(self, event):
         # We will work in microns and round to the nearest micron before applying to the board.
         # Get the centre point in microns
@@ -262,6 +307,10 @@ class EmmettForm(EmmettDialog):
             self.extent_width_value = fset(self.extent_width, right - left)
             self.extent_height_value = fset(self.extent_height, bottom - top)
 
+            margin = self.analyzer.calculate_board_margin((left, top, right, bottom))
+            self.boardMargin.ChangeValue(fnormalize(margin))
+            self.board_margin_leave(None)
+
             board_text = self.analyzer.parse_board_text()
 
             if "Track Thickness" in board_text:
@@ -342,13 +391,10 @@ class EmmettForm(EmmettDialog):
         if newValue == self.track_width_value:
             return
 
-        debug(f"track_width_leave: {newValue}")
         self.track_width_value = newValue
 
         spacing_order = (self.track_order & 0x0f0) >> 4
         pitch_order = self.track_order & 0x00f
-
-        debug(f"track_order: {self.track_order:#03x}, spacing_order: {spacing_order}, pitch_order: {pitch_order}")
 
         if spacing_order > pitch_order:
             self.track_order = 0x132
@@ -366,7 +412,6 @@ class EmmettForm(EmmettDialog):
 
     def track_pitch_leave(self, event):
         newValue = field_normalize(self.track_pitch)
-        debug(f"track_pitch_leave: {newValue}, {self.track_pitch_value}")
         if newValue == self.track_pitch_value:
             return
 
@@ -374,8 +419,6 @@ class EmmettForm(EmmettDialog):
 
         spacing_order = (self.track_order & 0x0f0) >> 4
         width_order = (self.track_order & 0xf00) >> 8
-
-        debug(f"track_order: {self.track_order:#03x}, width_order: {width_order}, spacing_order: {spacing_order}")
 
         if spacing_order <= width_order:
             self.track_order = 0x321
@@ -388,25 +431,28 @@ class EmmettForm(EmmettDialog):
             self.track_spacing.ChangeValue(newValue)
             self.track_spacing_value = newValue
 
+    def board_margin_leave(self, event):
+        newValue = field_normalize(self.boardMargin)
+        if newValue == self.board_margin_value:
+            return
+
+        self.board_margin_value = newValue
+        self.router.margin = float(newValue) * 1000
+
     def track_spacing_enter(self, event):
         self.track_spacing_leave(event)
 
     def track_spacing_leave(self, event):
         newValue = field_normalize(self.track_spacing)
         newSpacing = float(newValue)
-        debug(f"track_spacing_leave: {newValue}, {newSpacing}")
 
         if newValue == self.track_spacing_value:
             return
-
-        debug(f"track_spacing_leave: {newValue}")
 
         self.track_spacing_value = newValue
 
         pitch_order = (self.track_order & 0x00f)
         width_order = (self.track_order & 0xf00) >> 8
-
-        debug(f"track_order: {self.track_order:#03x}, width_order: {width_order}, pitch_order: {pitch_order}")
 
         if pitch_order <= width_order:
             self.track_order = 0x312
@@ -446,12 +492,10 @@ class EmmettForm(EmmettDialog):
         mt = fget(self.maximum_temperature)
         hp = fget(self.heater_power)
         cold_resistance = temperature_adjust_resistance(tr, mt, at)
-        debug(f"target_resistance: {tr}, ambient_temperature: {at}, maximum_temperature: {mt}, heater_power: {hp}, cold_resistance: {cold_resistance}")
         fset(self.cold_current, sqrt(hp / cold_resistance))
 
     def power_margin_leave(self, event):
         newValue = field_normalize(self.power_margin)
-        debug(f"power_margin_leave: {newValue}")
         if newValue == self.power_margin_value:
             return
 
@@ -466,7 +510,6 @@ class EmmettForm(EmmettDialog):
 
     def thermal_resistance_leave(self, event):
         newValue = field_normalize(self.thermal_resistance)
-        debug(f"thermal_resistance_leave: {newValue}")
         if newValue == self.thermal_resistance_value:
             return
 
@@ -481,7 +524,6 @@ class EmmettForm(EmmettDialog):
 
     def track_thickness_leave(self, event):
         newValue = field_normalize(self.track_thickness)
-        debug(f"track_thickness_leave: {newValue}")
 
         if newValue == self.track_thickness_value:
             return
@@ -495,7 +537,6 @@ class EmmettForm(EmmettDialog):
 
     def heater_power_leave(self, event):
         newValue = field_normalize(self.heater_power)
-        debug(f"heater_power_leave: {newValue}")
         if newValue == self.heater_power_value:
             return
 
@@ -511,7 +552,6 @@ class EmmettForm(EmmettDialog):
 
     def heater_voltage_leave(self, event):
         newValue = field_normalize(self.heater_voltage)
-        debug(f"heater_voltage_leave: {newValue}")
         if newValue == self.heater_voltage_value:
             return
 
@@ -524,7 +564,6 @@ class EmmettForm(EmmettDialog):
 
     def ambient_temperature_leave(self, event):
         newValue = field_normalize(self.ambient_temperature)
-        debug(f"ambient_temperature_leave: {newValue}")
         if newValue == self.ambient_temperature_value:
             return
 
@@ -539,7 +578,6 @@ class EmmettForm(EmmettDialog):
 
     def maximum_temperature_leave(self, event):
         newValue = field_normalize(self.maximum_temperature)
-        debug(f"maximum_temperature_leave: {newValue}")
         if newValue == self.maximum_temperature_value:
             return
 
@@ -570,7 +608,6 @@ class EmmettForm(EmmettDialog):
             if self.auto_geometryze.GetValue():
                 self.click_geometryze_button(event)
 
-            debug(f"self.track_width_value: {self.track_width_value}, self.track_spacing_value: {self.track_spacing_value}")
             builder = self.builder
             router = self.router
             factory = router.factory
@@ -675,7 +712,6 @@ class EmmettForm(EmmettDialog):
             factory = self.router.factory
             msg = f"Track details exported to: {csv_filename}, total resistance = {factory.calculate_total_resistance(tracks, float(self.maximum_temperature_value)):.3f}Ω"
             info_msg(msg)
-            debug(msg)
 
             return timestamp
             
